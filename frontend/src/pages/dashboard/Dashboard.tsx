@@ -2,6 +2,7 @@ import Sidebar from "../../components/layout/Sidebar";
 import Header from "../../components/layout/Header";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
+import Footer from "../../components/layout/Footer";
 
 import {
   LineChart,
@@ -106,14 +107,13 @@ export default function Dashboard() {
             </div>
           </div>
         </main>
+        <Footer />
       </div>
     </div>
   );
 }
 
-/* ===================================================== */
 /* COMPONENTES AUXILIARES */
-/* ===================================================== */
 
 interface CardProps {
   title: string;

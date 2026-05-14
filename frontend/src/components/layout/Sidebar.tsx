@@ -5,6 +5,8 @@ import {
   FileBarChart,
   ChevronLeft,
   ChevronRight,
+  DatabaseBackup,
+  University,
 } from "lucide-react";
 
 import { useState } from "react";
@@ -122,6 +124,7 @@ export default function Sidebar() {
         </button>
 
         <button
+          onClick={() => navigate("/relatorios")}
           className="
             flex
             items-center
@@ -136,6 +139,24 @@ export default function Sidebar() {
           <FileBarChart />
 
           {!collapsed && <span>Relatórios</span>}
+        </button>
+
+        <button
+          onClick={() => navigate("/backup")}
+          className="
+            flex
+            items-center
+            gap-3
+            p-3
+            rounded-xl
+            hover:bg-slate-800
+            transition-all
+            cursor-pointer
+          "
+        >
+          <DatabaseBackup />
+
+          {!collapsed && <span>Backup</span>}
         </button>
       </nav>
     </aside>

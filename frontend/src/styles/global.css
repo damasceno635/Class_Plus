@@ -28,3 +28,7 @@ body{
 button{
   cursor:pointer;
 }
+
+.action-btn {
+  @apply text-white p-2 rounded-xl hover:scale-105 transition-all;
+}

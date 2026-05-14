@@ -1,7 +1,7 @@
 import { type ChangeEvent } from "react";
 import Sidebar from "../../components/layout/Sidebar";
-
 import Header from "../../components/layout/Header";
+import Footer from "../../components/layout/Footer";
 
 import {
   Camera,
@@ -338,6 +338,7 @@ export default function Profile() {
             </div>
           </div>
         </main>
+        <Footer />
       </div>
     </div>
   );

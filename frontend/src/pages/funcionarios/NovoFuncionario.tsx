@@ -11,6 +11,7 @@ import type {
 
 import Sidebar from "../../components/layout/Sidebar";
 import Header from "../../components/layout/Header";
+import Footer from "../../components/layout/Footer";
 
 import {
   Plus,
@@ -801,6 +802,7 @@ export default function NovoFuncionario() {
             </button>
           </form>
         </main>
+        <Footer />
       </div>
     </div>
   );

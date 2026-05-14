@@ -11,6 +11,7 @@ import type {
 
 import Sidebar from "../../components/layout/Sidebar";
 import Header from "../../components/layout/Header";
+import Footer from "../../components/layout/Footer";
 
 import {
   Plus,
@@ -41,7 +42,10 @@ interface AlunoFormData {
   cpf: string;
   nascimento: string;
   sexo: string;
-  turma: string;
+  nivelEnsino: string;
+  anoTurma: string;
+  serieTurma: string;
+  anoLetivo: string;
 
   cep: string;
   cidade: string;
@@ -194,9 +198,28 @@ export default function NovoAluno() {
                   options={["Masculino", "Feminino"]}
                 />
 
-                <Input
-                  label="Turma"
-                  register={register("turma")}
+                <Select
+                  label="Nível de Ensino"
+                  register={register("nivelEnsino")}
+                  options={["Ensino Fundamental", "Ensino Médio"]}
+                />
+
+                <Select
+                  label="Ano"
+                  register={register("anoTurma")}
+                  options={["1º Ano", "2º Ano", "3º Ano", "4º Ano", "5º Ano", "6º Ano", "7º Ano", "8º Ano", "9º Ano"]}
+                />
+
+                <Select
+                  label="Série"
+                  register={register("serieTurma")}
+                  options={["A", "B", "C", "D"]}
+                />
+
+                <Select
+                  label="Ano Letivo"
+                  register={register("anoLetivo")}
+                  options={["2026.1", "2026.2", "2027.1", "2027.2"]}
                 />
               </Grid>
             </Section>
@@ -541,6 +564,7 @@ export default function NovoAluno() {
             </button>
           </form>
         </main>
+        <Footer />
       </div>
     </div>
   );
