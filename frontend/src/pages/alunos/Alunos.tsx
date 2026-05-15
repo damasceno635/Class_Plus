@@ -164,7 +164,6 @@ export default function Alunos() {
                     <Th>Status</Th>
                     <Th className="hidden md:table-cell">Nível</Th>
                     <Th>Turma</Th>
-                    <Th className="hidden lg:table-cell">Ano Letivo</Th>
                     <Th>Ações</Th>
                   </tr>
                 </thead>
@@ -190,7 +189,6 @@ export default function Alunos() {
                       </Td>
                       <Td className="hidden md:table-cell">{aluno.nivel}</Td>
                       <Td>{`${aluno.ano} ${aluno.serie}`}</Td>
-                      <Td className="hidden lg:table-cell">{aluno.anoLetivo}</Td>
                       <Td>
                         <div className="flex items-center gap-2">
                           <Link
