@@ -32,3 +32,23 @@ button{
 .action-btn {
   @apply text-white p-2 rounded-xl hover:scale-105 transition-all;
 }
+
+.finance-card {
+  @apply bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border border-slate-200 dark:border-slate-800;
+}
+
+.input-style {
+  @apply w-full p-4 rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-white outline-none;
+}
+
+.section-title {
+  @apply text-2xl font-bold text-slate-800 dark:text-white;
+}
+
+.table-head {
+  @apply text-left py-4 text-slate-500 dark:text-slate-400;
+}
+
+.table-cell {
+  @apply py-4 text-slate-700 dark:text-slate-300;
+}
