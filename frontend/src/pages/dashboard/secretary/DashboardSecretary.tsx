@@ -52,7 +52,7 @@ const solicitacoesRecentes = [
   { id: 3, tipo: "Declaração", aluno: "Thiago Santos", data: "07/06/2026", status: "pendente" },
 ];
 
-export default function DashboardSecretario() {
+export default function DashboardSecretary() {
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("");
 

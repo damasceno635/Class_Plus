@@ -48,7 +48,7 @@ const chartData = [
 /* MAIN COMPONENT */
 /* ===================================================== */
 
-export default function Financeiro() {
+export default function FinancialAdmin() {
   const [busca, setBusca] = useState("");
   const [statusFiltro, setStatusFiltro] = useState("");
 

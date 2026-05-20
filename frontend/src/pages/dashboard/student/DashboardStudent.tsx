@@ -71,7 +71,7 @@ const boletim = [
   { disciplina: "História", nota1: 8.5, nota2: 9.0, nota3: 8.5, nota4: 9.0, media: 8.75, faltas: 3 },
 ];
 
-export default function DashboardAluno() {
+export default function DashboardStudent() {
   const [selectedDay, setSelectedDay] = useState("segunda");
 
   return (

@@ -1,6 +1,6 @@
 import { createContext, useContext, useState } from "react";
 
-type Cargo = "admin" | "secretário(a)" | "coordenador(a)" | "professor(a)" | "aluno(a)";
+export type Cargo = "admin" | "secretary" | "coordinator" | "teacher" | "student";
 
 interface User {
   nome: string;

@@ -4,25 +4,30 @@ import { Moon, Sun, Mail, Lock, ChevronDown } from "lucide-react";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import type { Cargo } from "../../contexts/AuthContext";
 
 export default function Login() {
   const themeContext = useTheme();
+
   const toggleTheme = themeContext?.toggleTheme || (() => {});
   const theme = (themeContext as any)?.theme || "light";
+
   const isDark = theme === "dark";
-  
-  const [cargo, setCargo] = useState("admin");
+
+  const [cargo, setCargo] = useState<Cargo>("admin");
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
+
   const { login } = useAuth();
+
   const navigate = useNavigate();
 
   function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    
-    // Simulação de login - apenas frontend
+
     if (email && senha) {
-      login(cargo as any);
+      login(cargo);
+
       navigate("/dashboard");
     } else {
       alert("Por favor, preencha email e senha");
@@ -61,12 +66,13 @@ export default function Login() {
           dark:border-slate-800
         "
       >
-        {/* Header com Logo e Toggle Theme */}
+        {/* Header */}
         <div className="flex items-center justify-between mb-6 sm:mb-8">
           <div>
             <h1 className="text-3xl sm:text-4xl font-bold text-blue-600 dark:text-blue-500">
               Class+
             </h1>
+
             <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1">
               Educação Inteligente para o Futuro
             </p>
@@ -75,11 +81,11 @@ export default function Login() {
           <button
             onClick={toggleTheme}
             className="
-              p-2 
-              rounded-full 
-              bg-blue-600 
-              hover:bg-blue-700 
-              text-white 
+              p-2
+              rounded-full
+              bg-blue-600
+              hover:bg-blue-700
+              text-white
               cursor-pointer
               transition-all
               hover:scale-110
@@ -92,15 +98,17 @@ export default function Login() {
 
         {/* Formulário */}
         <form onSubmit={handleLogin} className="space-y-5">
-          {/* Seleção de Cargo */}
+
+          {/* Cargo */}
           <div>
             <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
               Perfil de Acesso
             </label>
+
             <div className="relative mt-2">
               <select
                 value={cargo}
-                onChange={(e) => setCargo(e.target.value)}
+                onChange={(e) => setCargo(e.target.value as Cargo)}
                 className="
                   w-full
                   p-3
@@ -123,19 +131,28 @@ export default function Login() {
                 "
               >
                 <option value="admin">Administrador</option>
-                <option value="secretário(a)">Secretário(a)</option>
-                <option value="coordenador(a)">Coordenador(a)</option>
-                <option value="professor(a)">Professor(a)</option>
-                <option value="aluno(a)">Aluno(a)</option>
+                <option value="secretary">Secretário(a)</option>
+                <option value="coordinator">Coordenador(a)</option>
+                <option value="teacher">Professor(a)</option>
+                <option value="student">Aluno(a)</option>
               </select>
+
               <ChevronDown
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none"
+                className="
+                  absolute
+                  right-3
+                  top-1/2
+                  -translate-y-1/2
+                  text-slate-400
+                  dark:text-slate-500
+                  pointer-events-none
+                "
                 size={18}
               />
             </div>
           </div>
 
-          {/* Campo Email */}
+          {/* Email */}
           <div>
             <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
               Email
@@ -143,7 +160,14 @@ export default function Login() {
 
             <div className="relative mt-2">
               <Mail
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"
+                className="
+                  absolute
+                  left-3
+                  top-1/2
+                  -translate-y-1/2
+                  text-slate-400
+                  dark:text-slate-500
+                "
                 size={18}
               />
 
@@ -152,6 +176,7 @@ export default function Login() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Digite seu email"
+                required
                 className="
                   w-full
                   pl-10
@@ -172,12 +197,11 @@ export default function Login() {
                   focus:ring-blue-500
                   focus:border-blue-500
                 "
-                required
               />
             </div>
           </div>
 
-          {/* Campo Senha */}
+          {/* Senha */}
           <div>
             <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
               Senha
@@ -185,7 +209,14 @@ export default function Login() {
 
             <div className="relative mt-2">
               <Lock
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"
+                className="
+                  absolute
+                  left-3
+                  top-1/2
+                  -translate-y-1/2
+                  text-slate-400
+                  dark:text-slate-500
+                "
                 size={18}
               />
 
@@ -194,6 +225,7 @@ export default function Login() {
                 value={senha}
                 onChange={(e) => setSenha(e.target.value)}
                 placeholder="Digite sua senha"
+                required
                 className="
                   w-full
                   pl-10
@@ -214,26 +246,31 @@ export default function Login() {
                   focus:ring-blue-500
                   focus:border-blue-500
                 "
-                required
               />
             </div>
           </div>
 
-          {/* Link Esqueceu a Senha */}
+          {/* Esqueceu senha */}
           <div className="text-right">
             <a
               href="#"
               onClick={(e) => {
                 e.preventDefault();
+
                 alert("Funcionalidade em desenvolvimento");
               }}
-              className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+              className="
+                text-sm
+                text-blue-600
+                dark:text-blue-400
+                hover:underline
+              "
             >
               Esqueceu a senha?
             </a>
           </div>
 
-          {/* Botão Entrar */}
+          {/* Botão */}
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}

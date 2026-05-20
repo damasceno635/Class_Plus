@@ -4,7 +4,7 @@ import Footer from "../../../components/layout/Footer";
 import MetricCard from "../../../components/layout/MetricCard";
 import { BookOpen, Users, TrendingUp, Clock, CheckSquare } from "lucide-react";
 
-export default function DashboardProfessor() {
+export default function DashboardTeacher() {
   return (
     <div className="flex min-h-screen bg-slate-100 dark:bg-slate-950">
       <Sidebar />

@@ -63,7 +63,7 @@ const alertasPedagogicos = [
   { id: 4, aluno: "Pedro Lima", turma: "2º B", motivo: "Dificuldade em Matemática", gravidade: "media" },
 ];
 
-export default function DashboardCoordenador() {
+export default function DashboardCoordinator() {
   const [periodo, setPeriodo] = useState("2026");
 
   return (
