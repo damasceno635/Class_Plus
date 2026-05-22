@@ -14,151 +14,197 @@ import {
 } from "lucide-react";
 
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import type { ReactNode } from "react";
+
+import { useNavigate, useLocation } from "react-router-dom";
+
+import { useAuth } from "../../contexts/AuthContext";
+import type { Cargo } from "../../contexts/AuthContext";
+
+interface MenuItem {
+  label: string;
+  icon: ReactNode;
+  path: string;
+  roles: Cargo[];
+}
 
 export default function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false);
-  const navigate = useNavigate();
+  // ESTADO PERSISTENTE DO SIDEBAR
+  const [collapsed, setCollapsed] = useState(() => {
+    const saved = localStorage.getItem("sidebar-collapsed");
+    return saved ? JSON.parse(saved) : false;
+  });
 
-  const menuItems = [
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user } = useAuth();
+
+  if (!user) return null;
+
+  function toggleSidebar() {
+    const newValue = !collapsed;
+
+    setCollapsed(newValue);
+
+    localStorage.setItem(
+      "sidebar-collapsed",
+      JSON.stringify(newValue)
+    );
+  }
+
+  const menuItems: MenuItem[] = [
     {
       label: "Dashboard",
-      title: "Dashboard",
       icon: <LayoutDashboard size={20} />,
       path: "/dashboard",
+      roles: ["admin", "secretary", "coordinator", "teacher", "student"],
     },
     {
       label: "Alunos",
-      title: "Alunos",
       icon: <GraduationCap size={20} />,
       path: "/alunos",
+      roles: ["admin", "secretary", "coordinator"],
     },
     {
       label: "Funcionários",
-      title: "Funcionários",
       icon: <Users size={20} />,
       path: "/funcionarios",
+      roles: ["admin", "secretary"],
     },
     {
       label: "Roteiro de Aula",
-      title: "Roteiro de Aula",
       icon: <BookOpen size={20} />,
       path: "/roteiro-aula",
+      roles: ["admin", "coordinator", "teacher"],
     },
     {
       label: "Calendário Escolar",
-      title: "Calendário Escolar",
       icon: <CalendarDays size={20} />,
       path: "/calendario",
+      roles: ["admin", "secretary", "coordinator", "teacher", "student"],
     },
     {
       label: "Desempenho Acadêmico",
-      title: "Desempenho Acadêmico",
       icon: <LineChart size={20} />,
       path: "/desempenho",
+      roles: ["admin", "coordinator", "teacher", "student"],
     },
     {
       label: "Requisições",
-      title: "Requisições",
       icon: <ClipboardList size={20} />,
       path: "/requisicoes",
+      roles: ["admin", "secretary", "coordinator", "teacher", "student"],
     },
     {
       label: "Financeiro",
-      title: "Financeiro",
       icon: <DollarSign size={20} />,
       path: "/financeiro",
+      roles: ["admin", "secretary", "student"],
     },
     {
       label: "Relatórios",
-      title: "Relatórios",
       icon: <FileBarChart size={20} />,
-      path: "/reports",
+      path: "/relatorios",
+      roles: ["admin", "secretary", "coordinator"],
     },
     {
       label: "Backup",
-      title: "Backup",
       icon: <DatabaseBackup size={20} />,
       path: "/backup",
+      roles: ["admin"],
     },
   ];
+
+  const filteredMenus = menuItems.filter((item) =>
+    item.roles.includes(user.cargo)
+  );
 
   return (
     <aside
       className={`
-        ${collapsed ? "w-24" : "w-72"}
+        ${collapsed ? "w-20" : "w-72"}
         sticky
         top-0
         h-screen
         flex-shrink-0
         bg-slate-900
         text-white
-        p-5
+        p-4
         transition-all
         duration-300
         flex
         flex-col
-        overflow-y-auto
+        z-20
       `}
     >
-      <div className="flex items-center justify-between">
+      {/* TOPO */}
+      <div className="flex items-center justify-between mt-2 mb-8 px-2">
         {!collapsed && (
           <div>
             <h1 className="text-3xl font-bold text-blue-500">
               Class+
             </h1>
-
-            <p className="text-sm opacity-70">
-              Gestão Escolar
-            </p>
           </div>
         )}
 
         <button
-          onClick={() => setCollapsed(!collapsed)}
+          onClick={toggleSidebar}
           className="
             p-2
             rounded-lg
             hover:bg-slate-800
-            transition-all
-            cursor-pointer
+            transition-colors
           "
         >
           {collapsed ? (
-            <ChevronRight />
+            <ChevronRight size={20} />
           ) : (
-            <ChevronLeft />
+            <ChevronLeft size={20} />
           )}
         </button>
       </div>
 
-      <nav className="flex flex-col gap-3 mt-10">
-        {menuItems.map((item) => (
-          <button
-            key={item.label}
-            onClick={() => navigate(item.path)}
-            className="
-              flex
-              items-center
-              gap-3
-              p-3
-              rounded-xl
-              hover:bg-slate-800
-              transition-all
-              cursor-pointer
-              text-left
-              w-full
-            "
-          >
-            {item.icon}
+      {/* MENU */}
+      <nav className="flex flex-col gap-2 overflow-y-auto custom-scrollbar">
+        {filteredMenus.map((item) => {
+          const isActive = location.pathname.startsWith(item.path);
 
-            {!collapsed && (
-              <span className="text-sm font-medium">
-                {item.label}
-              </span>
-            )}
-          </button>
-        ))}
+          return (
+            <button
+              key={item.label}
+              onClick={() => navigate(item.path)}
+              title={collapsed ? item.label : ""}
+              className={`
+                flex
+                items-center
+                gap-4
+                p-3
+                rounded-xl
+                transition-all
+                w-full
+                ${
+                  collapsed ? "justify-center" : ""
+                }
+
+                ${
+                  isActive
+                    ? "bg-blue-600 text-white shadow-md"
+                    : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                }
+              `}
+            >
+              <div className="flex-shrink-0">
+                {item.icon}
+              </div>
+
+              {!collapsed && (
+                <span className="text-sm font-medium truncate">
+                  {item.label}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </nav>
     </aside>
   );

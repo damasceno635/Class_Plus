@@ -1,36 +1,35 @@
-// ✅ Adicionado o useEffect na importação
 import { type ChangeEvent, useEffect } from "react";
 import { useNavigate } from "react-router-dom"; 
 import Sidebar from "../../components/layout/Sidebar";
 import Header from "../../components/layout/Header";
 import Footer from "../../components/layout/Footer";
 
-import {
-  Camera,
-  Lock,
-  LogOut,
-  Save,
-  X
-} from "lucide-react";
-
+import { Camera, Lock, LogOut, Save, X } from "lucide-react";
 import { useTheme } from "../../contexts/ThemeContext";
+
+// IMPORTAR O CONTEXTO DE AUTENTICAÇÃO 👇
+import { useAuth } from "../../contexts/AuthContext";
+
+const roleTranslations: Record<string, string> = {
+  admin: "Administrador",
+  secretary: "Secretário(a)",
+  coordinator: "Coordenador(a)",
+  teacher: "Professor(a)",
+  student: "Aluno(a)",
+};
 
 export default function Profile() {
   const navigate = useNavigate(); 
+  const { profileImage, setProfileImage } = useTheme();
   
-  const {
-    profileImage,
-    setProfileImage,
-  } = useTheme();
+  // PEGANDO O USUÁRIO LOGADO 👇
+  const { user, logout } = useAuth();
 
-  // ✅ CORREÇÃO: Garante que a página comece no topo (0,0) ao abrir
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
 
-  function handleImageChange(
-    event: ChangeEvent<HTMLInputElement>
-  ) {
+  function handleImageChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -43,6 +42,16 @@ export default function Profile() {
     reader.readAsDataURL(file);
   }
 
+  function handleLogout() {
+    logout();
+    navigate("/");
+  }
+
+  // DADOS FAKE BASEADOS NO PERFIL (Como é só frontend por enquanto)
+  const userRoleTranslated = user ? roleTranslations[user.cargo] : "Sem Cargo";
+  const userEmail = user ? `${user.cargo}@classplus.com`.toLowerCase() : "";
+  const userRegistro = user ? `REG-2026-${user.cargo.toUpperCase().substring(0,3)}` : "";
+
   return (
     <div className="flex min-h-screen bg-slate-100 dark:bg-slate-900">
       <Sidebar />
@@ -51,7 +60,6 @@ export default function Profile() {
         <Header />
 
         <main className="p-4 md:p-8 max-w-5xl mx-auto">
-          {/* HEADER COM FUNÇÃO DE VOLTAR */}
           <div className="mb-8 flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div>
@@ -59,7 +67,7 @@ export default function Profile() {
                   Meu Perfil
                 </h1>
                 <p className="text-slate-500 dark:text-slate-400">
-                  Informações da conta
+                  Informações da conta logada
                 </p>
               </div>
             </div>
@@ -73,7 +81,6 @@ export default function Profile() {
             </button>
           </div>
 
-          {/* RESTANTE DO CONTEÚDO (CARD, FORM, ETC) */}
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden">
             <div className="h-40 bg-gradient-to-r from-blue-600 to-indigo-600" />
 
@@ -94,28 +101,26 @@ export default function Profile() {
               </div>
 
               <div className="space-y-8">
-                {/* DADOS PESSOAIS */}
                 <div>
                   <h2 className="text-xl font-bold mb-5 text-slate-800 dark:text-white">Dados Pessoais</h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <Input label="Nome" placeholder="Administrador" />
-                    <Input label="Email" placeholder="admin@classplus.com" />
-                    <Input label="Cargo" placeholder="Diretoria" />
-                    <Input label="Registro" placeholder="REG-2026-001" />
-                    <Input label="Ingresso" placeholder="Janeiro 2026" />
+                    {/* INJETANDO OS DADOS DINÂMICOS AQUI 👇 */}
+                    <Input label="Nome" defaultValue={user?.nome} />
+                    <Input label="Email" defaultValue={userEmail} />
+                    <Input label="Cargo" defaultValue={userRoleTranslated} />
+                    <Input label="Registro" defaultValue={userRegistro} />
+                    <Input label="Ingresso" defaultValue="Janeiro 2026" />
                   </div>
                 </div>
 
-                {/* SEGURANÇA */}
                 <div>
                   <h2 className="text-xl font-bold mb-5 text-slate-800 dark:text-white">Segurança</h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <Input type="password" label="Nova Senha" />
-                    <Input type="password" label="Confirmar Senha" />
+                    <Input type="password" label="Nova Senha" placeholder="••••••••" />
+                    <Input type="password" label="Confirmar Senha" placeholder="••••••••" />
                   </div>
                 </div>
 
-                {/* BOTÕES DE AÇÃO */}
                 <div className="flex flex-col md:flex-row gap-4">
                   <button className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-2xl transition-all font-semibold">
                     <Save size={18} /> Salvar Alterações
@@ -125,7 +130,10 @@ export default function Profile() {
                     <Lock size={18} /> Alterar Senha
                   </button>
 
-                  <button className="flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white px-6 py-4 rounded-2xl transition-all font-semibold">
+                  <button 
+                    onClick={handleLogout}
+                    className="flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white px-6 py-4 rounded-2xl transition-all font-semibold"
+                  >
                     <LogOut size={18} /> Sign Out
                   </button>
                 </div>
@@ -139,49 +147,26 @@ export default function Profile() {
   );
 }
 
-// COMPONENTE AUXILIAR
-// Definição da interface que o TypeScript não estava encontrando
+// COMPONENTE AUXILIAR ATUALIZADO (Adicionado defaultValue)
 interface InputProps {
   label: string;
   placeholder?: string;
+  defaultValue?: string;
   type?: string;
 }
 
-function Input({
-  label,
-  placeholder,
-  type = "text",
-}: InputProps) {
+function Input({ label, placeholder, defaultValue, type = "text" }: InputProps) {
   return (
     <div className="flex flex-col gap-2">
-      <label
-        className="
-          font-medium
-          text-slate-700
-          dark:text-white
-        "
-      >
+      <label className="font-medium text-slate-700 dark:text-white">
         {label}
       </label>
 
       <input
         type={type}
         placeholder={placeholder}
-        className="
-          w-full
-          p-4
-          rounded-2xl
-          border
-          border-slate-300
-          dark:border-slate-700
-          bg-white
-          dark:bg-slate-800
-          dark:text-white
-          outline-none
-          focus:ring-2
-          focus:ring-blue-500
-          transition-all
-        "
+        defaultValue={defaultValue} // Usado para injetar os dados iniciais do React
+        className="w-full p-4 rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 transition-all"
       />
     </div>
   );

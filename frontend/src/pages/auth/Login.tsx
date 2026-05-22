@@ -295,7 +295,7 @@ export default function Login() {
 
         {/* Rodapé */}
         <p className="text-center text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-6">
-          © 2026 Class+. Todos os direitos reservados.
+          © 2026 Class Plus. Todos os direitos reservados.
         </p>
       </motion.div>
     </div>
