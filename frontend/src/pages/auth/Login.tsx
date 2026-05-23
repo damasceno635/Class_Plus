@@ -1,10 +1,9 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Moon, Sun, Mail, Lock, ChevronDown } from "lucide-react";
+import { Moon, Sun, Mail, Lock } from "lucide-react";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
-import type { Cargo } from "../../contexts/AuthContext";
 
 export default function Login() {
   const themeContext = useTheme();
@@ -14,7 +13,6 @@ export default function Login() {
 
   const isDark = theme === "dark";
 
-  const [cargo, setCargo] = useState<Cargo>("admin");
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
 
@@ -22,15 +20,14 @@ export default function Login() {
 
   const navigate = useNavigate();
 
-  function handleLogin(e: React.FormEvent) {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (email && senha) {
-      login(cargo);
-
+    try {
+      // Usamos o await para esperar o backend processar
+      await login(email, senha);
       navigate("/dashboard");
-    } else {
-      alert("Por favor, preencha email e senha");
+    } catch (error) {
+      // O alert já foi dado no AuthContext, ou você pode colocar um estado de erro aqui!
     }
   }
 
@@ -98,59 +95,6 @@ export default function Login() {
 
         {/* Formulário */}
         <form onSubmit={handleLogin} className="space-y-5">
-
-          {/* Cargo */}
-          <div>
-            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-              Perfil de Acesso
-            </label>
-
-            <div className="relative mt-2">
-              <select
-                value={cargo}
-                onChange={(e) => setCargo(e.target.value as Cargo)}
-                className="
-                  w-full
-                  p-3
-                  pr-10
-                  rounded-xl
-                  border
-                  outline-none
-                  transition-all
-                  bg-white
-                  dark:bg-slate-800
-                  border-slate-300
-                  dark:border-slate-700
-                  text-slate-900
-                  dark:text-white
-                  focus:ring-2
-                  focus:ring-blue-500
-                  focus:border-blue-500
-                  appearance-none
-                  cursor-pointer
-                "
-              >
-                <option value="admin">Administrador</option>
-                <option value="secretary">Secretário(a)</option>
-                <option value="coordinator">Coordenador(a)</option>
-                <option value="teacher">Professor(a)</option>
-                <option value="student">Aluno(a)</option>
-              </select>
-
-              <ChevronDown
-                className="
-                  absolute
-                  right-3
-                  top-1/2
-                  -translate-y-1/2
-                  text-slate-400
-                  dark:text-slate-500
-                  pointer-events-none
-                "
-                size={18}
-              />
-            </div>
-          </div>
 
           {/* Email */}
           <div>
