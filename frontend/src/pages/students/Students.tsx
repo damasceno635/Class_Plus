@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Plus,
   Eye,
@@ -7,13 +7,18 @@ import {
   Trash2,
   FileText,
   Search,
+  Loader2, // <- ADICIONAMOS O LOADER AQUI
 } from "lucide-react";
 import Sidebar from "../../components/layout/Sidebar";
 import Header from "../../components/layout/Header";
 import Footer from "../../components/layout/Footer";
+import { api } from "../../services/api";
+
+// @ts-ignore - Importação da biblioteca de PDF
+import html2pdf from "html2pdf.js";
 
 type Aluno = {
-  id: number;
+  id: string; // Garantimos que o ID é tratado como string
   matricula: string;
   nome: string;
   status: string;
@@ -23,39 +28,6 @@ type Aluno = {
   anoLetivo: string;
 };
 
-const alunosMock: Aluno[] = [
-  {
-    id: 1,
-    matricula: "20260001",
-    nome: "Maria Silva",
-    status: "Matriculado",
-    nivel: "Ensino Fundamental",
-    ano: "8º Ano",
-    serie: "A",
-    anoLetivo: "2026.1",
-  },
-  {
-    id: 2,
-    matricula: "20260002",
-    nome: "João Costa",
-    status: "Pré-Matriculado",
-    nivel: "Ensino Médio",
-    ano: "2º Ano",
-    serie: "B",
-    anoLetivo: "2026.1",
-  },
-  {
-    id: 3,
-    matricula: "20260003",
-    nome: "Ana Souza",
-    status: "Transferido",
-    nivel: "Ensino Médio",
-    ano: "3º Ano",
-    serie: "C",
-    anoLetivo: "2026.2",
-  },
-];
-
 const statusColorMap: Record<string, string> = {
   Matriculado: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
   "Pré-Matriculado": "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
@@ -64,13 +36,30 @@ const statusColorMap: Record<string, string> = {
 };
 
 export default function Alunos() {
-  const [alunos, setAlunos] = useState<Aluno[]>(alunosMock);
+  const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [alunoParaExcluir, setAlunoParaExcluir] = useState<Aluno | null>(null);
+  
+  // ESTADO PARA CONTROLAR QUAL BOTÃO DE PDF ESTÁ A GIRAR
+  const [gerandoPdfId, setGerandoPdfId] = useState<string | null>(null);
+  
   const [feedback, setFeedback] = useState<{
     type: "success" | "error";
     message: string;
   } | null>(null);
+
+  useEffect(() => {
+    async function carregarAlunos() {
+      try {
+        const response = await api.get('/alunos');
+        setAlunos(response.data);
+      } catch (error) {
+        console.error("Erro ao carregar os alunos do banco de dados.", error);
+        setFeedback({ type: "error", message: "Falha ao carregar a lista de alunos." });
+      }
+    }
+    carregarAlunos();
+  }, []);
 
   const filteredAlunos = useMemo(() => {
     const term = searchTerm.toLowerCase().trim();
@@ -82,15 +71,114 @@ export default function Alunos() {
     );
   }, [alunos, searchTerm]);
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!alunoParaExcluir) return;
-    setAlunos((prev) => prev.filter((a) => a.id !== alunoParaExcluir.id));
-    setFeedback({
-      type: "success",
-      message: `Aluno ${alunoParaExcluir.nome} removido com sucesso.`,
-    });
-    setAlunoParaExcluir(null);
-    setTimeout(() => setFeedback(null), 3000);
+    try {
+      await api.delete(`/alunos/${alunoParaExcluir.id}`);
+      setAlunos((prev) => prev.filter((a) => a.id !== alunoParaExcluir.id));
+      setFeedback({ type: "success", message: "Aluno e acessos excluídos com sucesso!" });
+    } catch (error: any) {
+      console.error("Erro ao excluir", error);
+      setFeedback({ type: "error", message: error.response?.data?.error || "Erro ao excluir o aluno. Tente novamente." });
+    } finally {
+      setAlunoParaExcluir(null);
+      setTimeout(() => setFeedback(null), 3000);
+    }
+  };
+
+  // MÁGICA: FUNÇÃO PARA GERAR PDF DIRETO DA LISTA
+  const handleGerarPDFDireto = async (alunoBasico: Aluno) => {
+    try {
+      setGerandoPdfId(alunoBasico.id); // Faz o botão girar
+      
+      // 1. Busca os dados completos deste aluno no backend
+      const response = await api.get(`/alunos/${alunoBasico.id}`);
+      const aluno = response.data;
+
+      // 2. Monta um documento HTML profissional (invisível na tela) usando inline-styles para o PDF ler
+      const htmlContent = `
+        <div style="font-family: Arial, sans-serif; color: #1e293b; padding: 40px; max-width: 800px; margin: 0 auto;">
+          <div style="display: flex; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 30px;">
+            ${aluno.foto ? `<img src="${aluno.foto}" crossorigin="anonymous" style="width: 100px; height: 100px; border-radius: 50%; object-fit: cover; margin-right: 20px;" />` : `<div style="width: 100px; height: 100px; border-radius: 50%; background: #e2e8f0; margin-right: 20px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #64748b;">Sem foto</div>`}
+            <div>
+              <h1 style="margin: 0; font-size: 26px; color: #0f172a;">${aluno.nome}</h1>
+              <p style="margin: 5px 0 0 0; font-size: 15px; color: #64748b;">Matrícula: <strong style="color:#0f172a;">${aluno.matricula}</strong> | Status: <strong style="color:#0f172a;">${aluno.status}</strong></p>
+            </div>
+          </div>
+
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px;">
+            <tr>
+              <td style="vertical-align: top; width: 50%; padding-right: 15px;">
+                <h2 style="font-size: 16px; color: #3b82f6; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px; margin-bottom: 10px;">Dados Pessoais</h2>
+                <p style="margin: 4px 0; font-size: 14px;"><strong>CPF:</strong> ${aluno.cpf}</p>
+                <p style="margin: 4px 0; font-size: 14px;"><strong>Nasc:</strong> ${aluno.nascimento}</p>
+                <p style="margin: 4px 0; font-size: 14px;"><strong>Sexo:</strong> ${aluno.sexo}</p>
+              </td>
+              <td style="vertical-align: top; width: 50%; padding-left: 15px;">
+                <h2 style="font-size: 16px; color: #3b82f6; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px; margin-bottom: 10px;">Informações Académicas</h2>
+                <p style="margin: 4px 0; font-size: 14px;"><strong>Nível:</strong> ${aluno.nivel}</p>
+                <p style="margin: 4px 0; font-size: 14px;"><strong>Turma:</strong> ${aluno.ano} ${aluno.serie}</p>
+                <p style="margin: 4px 0; font-size: 14px;"><strong>Ano Letivo:</strong> ${aluno.anoLetivo}</p>
+              </td>
+            </tr>
+          </table>
+
+          <div style="margin-bottom: 25px;">
+            <h2 style="font-size: 16px; color: #3b82f6; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px; margin-bottom: 10px;">Endereço Residencial</h2>
+            <p style="margin: 4px 0; font-size: 14px;">${aluno.endereco.rua}, ${aluno.endereco.numero} ${aluno.endereco.bloco ? '- Bloco ' + aluno.endereco.bloco : ''} ${aluno.endereco.quadra ? '- Quadra ' + aluno.endereco.quadra : ''}</p>
+            <p style="margin: 4px 0; font-size: 14px;">${aluno.endereco.cidade} - ${aluno.endereco.estado} | CEP: ${aluno.endereco.cep}</p>
+          </div>
+
+          <div style="margin-bottom: 25px;">
+            <h2 style="font-size: 16px; color: #3b82f6; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px; margin-bottom: 10px;">Responsáveis</h2>
+            ${aluno.responsaveis.length > 0 ? aluno.responsaveis.map((r: any) => `
+              <div style="margin-bottom: 10px; background: #f8fafc; padding: 10px 15px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                <p style="margin: 0 0 4px 0; font-size: 14px;"><strong>${r.nome}</strong> (${r.parentesco})</p>
+                <p style="margin: 0; color: #475569; font-size: 13px;">CPF: ${r.cpf} | Tel: ${r.contato} | Email: ${r.email}</p>
+              </div>
+            `).join('') : '<p style="color: #64748b; font-size: 14px;">Nenhum responsável cadastrado.</p>'}
+          </div>
+
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px;">
+            <tr>
+              <td style="vertical-align: top; width: 50%; padding-right: 15px;">
+                <h2 style="font-size: 16px; color: #3b82f6; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px; margin-bottom: 10px;">Deficiências / Necessidades</h2>
+                ${aluno.deficiencias.length > 0 ? `<ul style="margin: 0; padding-left: 20px; font-size: 14px;">${aluno.deficiencias.map((d: any) => `<li>${d.nome} (Apoio: ${d.apoio})</li>`).join('')}</ul>` : '<p style="color: #64748b; font-size: 14px;">Nenhuma informada.</p>'}
+              </td>
+              <td style="vertical-align: top; width: 50%; padding-left: 15px;">
+                <h2 style="font-size: 16px; color: #3b82f6; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px; margin-bottom: 10px;">Alergias</h2>
+                ${aluno.alergias.length > 0 ? `<ul style="margin: 0; padding-left: 20px; font-size: 14px;">${aluno.alergias.map((a: string) => `<li>${a}</li>`).join('')}</ul>` : '<p style="color: #64748b; font-size: 14px;">Nenhuma informada.</p>'}
+              </td>
+            </tr>
+          </table>
+          
+          <div style="text-align: center; margin-top: 40px; color: #94a3b8; font-size: 11px; border-top: 1px solid #e2e8f0; padding-top: 15px;">
+            Ficha Cadastral gerada pelo sistema Class Plus em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}
+          </div>
+        </div>
+      `;
+
+      // 3. Converte a string HTML num elemento DOM para o gerador de PDF ler
+      const container = document.createElement('div');
+      container.innerHTML = htmlContent;
+
+      const opcoes = {
+        margin: 10,
+        filename: `Ficha_${alunoBasico.matricula}_${alunoBasico.nome.replace(/\s+/g, "_")}.pdf`,
+        image: { type: "jpeg", quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" }
+      } as const;
+
+      // 4. Executa o Download
+      await html2pdf().set(opcoes).from(container).save();
+
+    } catch (error) {
+      console.error("Erro ao gerar PDF", error);
+      setFeedback({ type: "error", message: "Erro ao buscar os dados para gerar o PDF." });
+    } finally {
+      setGerandoPdfId(null); // Pára a animação do botão
+    }
   };
 
   return (
@@ -194,32 +282,65 @@ export default function Alunos() {
                             to={`/alunos/visualizar/${aluno.id}`}
                             aria-label={`Visualizar ${aluno.nome}`}
                             title="Visualizar"
-                            className="action-btn bg-blue-600 hover:bg-blue-700"
+                            className="
+                              p-2 rounded-xl transition-all duration-200
+                              bg-slate-100 text-slate-600
+                              dark:bg-slate-800 dark:text-slate-300
+                              hover:bg-blue-200 hover:text-blue-800
+                              dark:hover:bg-blue-900/40 dark:hover:text-blue-500
+                            "
                           >
                             <Eye size={16} />
                           </Link>
+
                           <Link
                             to={`/alunos/editar/${aluno.id}`}
                             aria-label={`Editar ${aluno.nome}`}
                             title="Editar"
-                            className="action-btn bg-yellow-500 hover:bg-yellow-600"
+                            className="
+                              p-2 rounded-xl transition-all duration-200
+                              bg-slate-100 text-slate-600
+                              dark:bg-slate-800 dark:text-slate-300
+                              hover:bg-amber-200 hover:text-amber-800
+                              dark:hover:bg-amber-900/40 dark:hover:text-amber-500
+                            "
                           >
                             <Pencil size={16} />
                           </Link>
+
                           <button
                             onClick={() => setAlunoParaExcluir(aluno)}
                             aria-label={`Excluir ${aluno.nome}`}
                             title="Excluir"
-                            className="action-btn bg-red-600 hover:bg-red-700"
+                            className="
+                              p-2 rounded-xl transition-all duration-200
+                              bg-slate-100 text-slate-600
+                              dark:bg-slate-800 dark:text-slate-300
+                              hover:bg-red-200 hover:text-red-700
+                              dark:hover:bg-red-900/40 dark:hover:text-red-500
+                            "
                           >
                             <Trash2 size={16} />
                           </button>
+
                           <button
+                            onClick={() => handleGerarPDFDireto(aluno)}
+                            disabled={gerandoPdfId === aluno.id}
                             aria-label={`Gerar ficha de ${aluno.nome}`}
                             title="Gerar PDF"
-                            className="action-btn bg-green-600 hover:bg-green-700"
+                            className={`
+                              p-2 rounded-xl transition-all duration-200
+                              ${gerandoPdfId === aluno.id 
+                                ? 'bg-emerald-600 text-white cursor-wait opacity-80' 
+                                : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 hover:bg-emerald-200 hover:text-emerald-800 dark:hover:bg-emerald-900/40 dark:hover:text-emerald-500'
+                              }
+                            `}
                           >
-                            <FileText size={16} />
+                            {gerandoPdfId === aluno.id ? (
+                              <Loader2 size={16} className="animate-spin" />
+                            ) : (
+                              <FileText size={16} />
+                            )}
                           </button>
                         </div>
                       </Td>

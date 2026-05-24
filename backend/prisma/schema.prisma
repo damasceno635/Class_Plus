@@ -11,7 +11,7 @@ datasource db {
   provider = "postgresql"
 }
 
-// Tabela de Users
+// Tabela de Users (login)
 model User {
   id        String   @id @default(uuid())
   nome      String
@@ -20,5 +20,83 @@ model User {
   cargo     String   // "admin", "secretary", "coordinator", "teacher", "student"
   criadoEm  DateTime @default(now())
 
+  // Relação: um usuário pode ser um aluno
+  aluno     Aluno?
+
   @@map("users") // Nome da tabela no banco
+}
+
+// Tabela de Alunos (Dados Acadêmicos e Pessoais)
+model Aluno {
+  id            String   @id @default(uuid())
+  matricula     String   @unique
+  
+  // Ligação com a tabela User (O aluno loga usando as credenciais do User)
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id])
+
+  status        String
+  cpf           String   @unique
+  nascimento    String
+  sexo          String
+  nivelEnsino   String
+  anoTurma      String
+  serieTurma    String
+  anoLetivo     String
+  
+  // Endereço (Podemos simplificar deixando na mesma tabela por enquanto)
+  cep           String
+  cidade        String
+  estado        String
+  rua           String
+  bloco         String?
+  quadra        String?
+  numero        String
+  
+  // Documentos e URLs de arquivos (Salvando os caminhos dos arquivos no servidor)
+  fotoUrl       String?
+  documentos    String[] // Um array de textos guardando os caminhos dos PDFs/Imagens
+
+  criadoEm      DateTime @default(now())
+
+  responsaveis  Responsavel[]
+  deficiencias  Deficiencia[]
+  alergias      Alergia[]
+
+  @@map("alunos")
+}
+
+model Responsavel {
+  id         String @id @default(uuid())
+  parentesco String
+  nome       String
+  cpf        String
+  contato    String
+  email      String
+  
+  alunoId    String
+  aluno      Aluno  @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+
+  @@map("responsaveis")
+}
+
+model Deficiencia {
+  id         String @id @default(uuid())
+  nome       String
+  apoio      String
+  laudo      String?
+  alunoId    String
+  aluno      Aluno  @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+
+  @@map("deficiencias")
+}
+
+model Alergia {
+  id         String @id @default(uuid())
+  nome       String
+  laudo      String?
+  alunoId    String
+  aluno      Aluno  @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+
+  @@map("alergias")
 }

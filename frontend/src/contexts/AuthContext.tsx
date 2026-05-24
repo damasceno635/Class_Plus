@@ -34,7 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (storagedUser && storagedToken) {
       setUser(JSON.parse(storagedUser));
     }
-    setIsLoading(false);
+    setIsLoading(false);  // só libera depois de verificar
   }, []);
 
   async function login(email: string, senha: string) {
