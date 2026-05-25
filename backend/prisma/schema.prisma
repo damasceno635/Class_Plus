@@ -21,7 +21,8 @@ model User {
   criadoEm  DateTime @default(now())
 
   // Relação: um usuário pode ser um aluno
-  aluno     Aluno?
+  aluno       Aluno?
+  funcionario Funcionario?
 
   @@map("users") // Nome da tabela no banco
 }
@@ -99,4 +100,108 @@ model Alergia {
   aluno      Aluno  @relation(fields: [alunoId], references: [id], onDelete: Cascade)
 
   @@map("alergias")
+}
+
+model Funcionario {
+  id              String   @id @default(uuid())
+  
+  // Ligação com a tabela User (Login)
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  status          String
+  vaga            String   // Cargo (Professor, Coordenador, etc)
+  contrato        String
+  periodoContrato String
+  dataFimContrato String?  // Opcional, pois contratos indeterminados não têm fim
+
+  cpf             String   @unique
+  ra              String   @unique // Registro Administrativo (Matrícula do funcionário)
+  nascimento      String
+  sexo            String
+  celular         String
+  
+  // Endereço
+  cep             String
+  cidade          String
+  estado          String
+  rua             String
+  bloco           String?
+  quadra          String?
+  numero          String
+
+  // Financeiro
+  salario         String
+  pagamento       String
+
+  // Arquivos
+  fotoUrl         String?
+  documentos      String[]
+
+  criadoEm        DateTime @default(now())
+
+  // Relações
+  formacoes       Formacao[]
+  experiencias    Experiencia[]
+  alocacoes       Alocacao[]    // As aulas que ele dá
+
+  @@map("funcionarios")
+}
+
+model Formacao {
+  id            String @id @default(uuid())
+  instituicao   String
+  cnpj          String
+  modalidade    String
+  periodoInicio String
+  periodoFinal  String
+  
+  funcionarioId String
+  funcionario   Funcionario @relation(fields: [funcionarioId], references: [id], onDelete: Cascade)
+
+  @@map("formacoes_funcionarios")
+}
+
+model Experiencia {
+  id            String @id @default(uuid())
+  empresa       String
+  cnpj          String
+  modalidade    String
+  periodoInicio String
+  periodoFinal  String
+  
+  funcionarioId String
+  funcionario   Funcionario @relation(fields: [funcionarioId], references: [id], onDelete: Cascade)
+
+  @@map("experiencias_funcionarios")
+}
+
+// A TABELA INDEPENDENTE DE TURMAS
+model Turma {
+  id          String @id @default(uuid())
+  ano         String // Ex: "1º Ano"
+  serie       String // Ex: "A"
+  periodo     String // Ex: "Matutino"
+  
+  // No futuro, podemos colocar um array de Alunos aqui!
+  alocacoes   Alocacao[]
+
+  // Garante que não teremos duas turmas "1º Ano A - Matutino" duplicadas no banco
+  @@unique([ano, serie, periodo]) 
+  @@map("turmas")
+}
+
+// A PONTE (Quem dá o quê, e onde?)
+model Alocacao {
+  id            String @id @default(uuid())
+  disciplina    String // Ex: "Matemática"
+  cargaHoraria  String // Ex: "40h"
+  
+  funcionarioId String
+  funcionario   Funcionario @relation(fields: [funcionarioId], references: [id], onDelete: Cascade)
+  
+  turmaId       String
+  turma         Turma @relation(fields: [turmaId], references: [id], onDelete: Cascade)
+
+  @@map("alocacoes_disciplinas")
 }

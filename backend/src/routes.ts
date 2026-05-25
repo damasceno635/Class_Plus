@@ -656,4 +656,330 @@ routes.delete(
   }
 );
 
+// ==========================================
+// ROTAS DE FUNCIONÁRIOS
+// ==========================================
+
+routes.post('/funcionarios', authMiddleware, upload.any(), async (req: AuthRequest, res) => {
+  try {
+    const { 
+      status, vaga, contrato, periodoContrato, dataFimContrato,
+      nome, email, cpf, ra, nascimento, sexo, celular,
+      cep, cidade, estado, rua, bloco, quadra, numero,
+      salario, pagamento,
+      disciplinas, formacoes, experiencias 
+    } = req.body;
+
+    const files = req.files as Express.Multer.File[];
+    let nomeArquivoFoto = null;
+    const caminhosDocumentos: string[] = [];
+
+    if (files) {
+      files.forEach(file => {
+        if (file.fieldname === 'foto') nomeArquivoFoto = file.filename;
+        else caminhosDocumentos.push(file.filename);
+      });
+    }
+
+    const emailExiste = await prisma.user.findUnique({ where: { email } });
+    const cpfExiste = await prisma.funcionario.findUnique({ where: { cpf } });
+    const raExiste = await prisma.funcionario.findUnique({ where: { ra } });
+
+    if (emailExiste || cpfExiste || raExiste) {
+      return res.status(400).json({ error: "Email, CPF ou RA já cadastrados no sistema." });
+    }
+
+    // Define qual será o cargo de login baseado na vaga
+    let cargoLogin = "staff";
+    if (vaga.toLowerCase().includes("professor")) cargoLogin = "teacher";
+    else if (vaga.toLowerCase().includes("coordenador")) cargoLogin = "coordinator";
+    else if (vaga.toLowerCase().includes("secretário")) cargoLogin = "secretary";
+
+    // O RA (Registro) será a senha provisória
+    const hashSenha = await bcrypt.hash(ra, 10);
+
+    const listaFormacoes = formacoes ? JSON.parse(formacoes) : [];
+    const listaExperiencias = experiencias ? JSON.parse(experiencias) : [];
+    const listaDisciplinas = disciplinas ? JSON.parse(disciplinas) : [];
+
+    // MÁGICA: Usamos uma "Transação" para garantir que, se falhar algo, nada é salvo incompleto
+    const resultado = await prisma.$transaction(async (tx) => {
+      
+      const newUser = await tx.user.create({
+        data: { nome, email, senha: hashSenha, cargo: cargoLogin }
+      });
+
+      const newFuncionario = await tx.funcionario.create({
+        data: {
+          userId: newUser.id,
+          status, vaga, contrato, periodoContrato, dataFimContrato,
+          cpf, ra, nascimento, sexo, celular,
+          cep, cidade, estado, rua, bloco: bloco || "", quadra: quadra || "", numero,
+          salario, pagamento,
+          fotoUrl: nomeArquivoFoto,       
+          documentos: caminhosDocumentos,
+          formacoes: { create: listaFormacoes },
+          experiencias: { create: listaExperiencias }
+        }
+      });
+
+      // Cria ou busca as Turmas e Aloca o Professor
+      for (const disc of listaDisciplinas) {
+        // 1. Busca se a turma já existe, senão cria
+        let turma = await tx.turma.findUnique({
+          where: {
+            ano_serie_periodo: { ano: disc.turma, serie: disc.serie, periodo: disc.periodo }
+          }
+        });
+
+        if (!turma) {
+          turma = await tx.turma.create({
+            data: { ano: disc.turma, serie: disc.serie, periodo: disc.periodo }
+          });
+        }
+
+        // 2. Aloca o funcionário nessa turma
+        await tx.alocacao.create({
+          data: {
+            disciplina: disc.disciplina,
+            cargaHoraria: disc.cargaHoraria,
+            funcionarioId: newFuncionario.id,
+            turmaId: turma.id
+          }
+        });
+      }
+
+      return { funcionario: newFuncionario, credenciais: { email: newUser.email, senhaProvisoria: ra } };
+    });
+
+    return res.status(201).json({
+      mensagem: "Funcionário cadastrado com sucesso!",
+      credenciaisAcesso: resultado.credenciais
+    });
+
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Erro interno ao cadastrar funcionário." });
+  }
+});
+
+// LISTAR TODOS OS FUNCIONÁRIOS
+routes.get('/funcionarios', authMiddleware, async (req, res) => {
+  try {
+    const funcionarios = await prisma.funcionario.findMany({
+      include: { user: true },
+      orderBy: { criadoEm: 'desc' }
+    });
+
+    const formatados = funcionarios.map(f => ({
+      id: f.id,
+      nome: f.user.nome,
+      cargo: f.vaga,
+      contrato: f.contrato,
+      status: f.status
+    }));
+
+    return res.json(formatados);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Erro ao buscar funcionários." });
+  }
+});
+
+// ROTA PARA BUSCAR UM FUNCIONÁRIO ESPECÍFICO PELO ID
+routes.get('/funcionarios/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Busca o funcionário e faz o JOIN com todas as tabelas relacionadas
+    const funcionario = await prisma.funcionario.findUnique({
+      where: { id },
+      include: {
+        user: true,
+        formacoes: true,
+        experiencias: true,
+        alocacoes: {
+          include: {
+            turma: true // Traz os dados da turma que ele dá aula
+          }
+        }
+      }
+    });
+
+    if (!funcionario) {
+      return res.status(404).json({ error: "Funcionário não encontrado." });
+    }
+
+    // Processa a foto do funcionário
+    const fotoUrl = funcionario.fotoUrl ? `http://localhost:3333/uploads/${funcionario.fotoUrl}` : '';
+
+    // Monta o objeto formatado que o frontend espera receber
+    const formatado = {
+      id: funcionario.id,
+      nome: funcionario.user.nome,
+      email: funcionario.user.email,
+      cargo: funcionario.vaga,
+      status: funcionario.status,
+      cpf: funcionario.cpf,
+      ra: funcionario.ra,
+      nascimento: funcionario.nascimento,
+      sexo: funcionario.sexo,
+      celular: funcionario.celular,
+      foto: fotoUrl,
+      contrato: {
+        tipo: funcionario.contrato,
+        periodo: funcionario.periodoContrato,
+        dataFim: funcionario.dataFimContrato || "Indeterminado"
+      },
+      endereco: {
+        cep: funcionario.cep,
+        cidade: funcionario.cidade,
+        estado: funcionario.estado,
+        rua: funcionario.rua,
+        bloco: funcionario.bloco || "",
+        quadra: funcionario.quadra || "",
+        numero: funcionario.numero
+      },
+      financeiro: {
+        salario: funcionario.salario,
+        pagamento: funcionario.pagamento
+      },
+      // Mapeia as alocações formatando para a exibição visual
+      disciplinas: funcionario.alocacoes.map(a => ({
+        nome: a.disciplina,
+        carga: a.cargaHoraria,
+        turma: `${a.turma.ano} ${a.turma.serie}`,
+        periodo: a.turma.periodo
+      })),
+      formacoes: funcionario.formacoes.map(f => ({
+        instituicao: f.instituicao,
+        cnpj: f.cnpj,
+        modalidade: f.modalidade,
+        periodo: `${f.periodoInicio} até ${f.periodoFinal}`
+      })),
+      experiencias: funcionario.experiencias.map(e => ({
+        empresa: e.empresa,
+        cnpj: e.cnpj,
+        modalidade: e.modalidade,
+        periodo: `${e.periodoInicio} até ${e.periodoFinal}`
+      })),
+      // Mapeia os documentos transformando em links públicos
+      documentos: funcionario.documentos.map(doc => `http://localhost:3333/uploads/${doc}`)
+    };
+
+    return res.json(formatado);
+
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Erro ao carregar a ficha do funcionário." });
+  }
+});
+
+// ROTA PARA EDITAR UM FUNCIONÁRIO (PUT)
+routes.put('/funcionarios/:id', authMiddleware, upload.any(), async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const { 
+      status, vaga, contrato, periodoContrato, dataFimContrato,
+      nome, email, cpf, ra, nascimento, sexo, celular,
+      cep, cidade, estado, rua, bloco, quadra, numero,
+      salario, pagamento,
+      disciplinas, formacoes, experiencias 
+    } = req.body;
+
+    const funcionarioAtual = await prisma.funcionario.findUnique({ where: { id } });
+    if (!funcionarioAtual) return res.status(404).json({ error: "Funcionário não encontrado." });
+
+    // 1. Arquivos
+    const files = req.files as Express.Multer.File[];
+    let nomeArquivoFoto = null;
+    const novosDocumentos: string[] = [];
+
+    if (files) {
+      files.forEach(file => {
+        if (file.fieldname === 'foto') nomeArquivoFoto = file.filename;
+        else novosDocumentos.push(file.filename);
+      });
+    }
+
+    // 2. Desempacotamento de Arrays
+    const listaFormacoes = formacoes ? JSON.parse(formacoes) : [];
+    const listaExperiencias = experiencias ? JSON.parse(experiencias) : [];
+    const listaDisciplinas = disciplinas ? JSON.parse(disciplinas) : [];
+
+    // 3. Transação (Atualiza tudo ou desfaz se der erro)
+    const resultado = await prisma.$transaction(async (tx) => {
+      // Atualiza o Email e Nome no Login
+      await tx.user.update({
+        where: { id: funcionarioAtual.userId },
+        data: { nome, email }
+      });
+
+      // Atualiza os dados básicos do funcionário
+      const updatedFuncionario = await tx.funcionario.update({
+        where: { id },
+        data: {
+          status, vaga, contrato, periodoContrato, 
+          dataFimContrato: dataFimContrato || null, // Se não vier, fica null
+          cpf, ra, nascimento, sexo, celular,
+          cep, cidade, estado, rua, bloco: bloco || "", quadra: quadra || "", numero,
+          salario, pagamento,
+          ...(nomeArquivoFoto && { fotoUrl: nomeArquivoFoto }),
+          ...(novosDocumentos.length > 0 && { documentos: { push: novosDocumentos } }),
+          // Limpa as antigas e cria as novas (evita duplicação)
+          formacoes: { deleteMany: {}, create: listaFormacoes },
+          experiencias: { deleteMany: {}, create: listaExperiencias }
+        }
+      });
+
+      // Atualiza as Alocações e Turmas
+      await tx.alocacao.deleteMany({ where: { funcionarioId: id } }); // Apaga as antigas
+
+      for (const disc of listaDisciplinas) {
+        let turma = await tx.turma.findUnique({
+          where: { ano_serie_periodo: { ano: disc.turma, serie: disc.serie, periodo: disc.periodo } }
+        });
+        if (!turma) {
+          turma = await tx.turma.create({
+            data: { ano: disc.turma, serie: disc.serie, periodo: disc.periodo }
+          });
+        }
+        await tx.alocacao.create({
+          data: {
+            disciplina: disc.disciplina || disc.nome, // Prevenção de nomes
+            cargaHoraria: disc.cargaHoraria || disc.carga,
+            funcionarioId: id,
+            turmaId: turma.id
+          }
+        });
+      }
+      return updatedFuncionario;
+    });
+
+    return res.json({ mensagem: "Funcionário atualizado com sucesso!", funcionario: resultado });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Erro ao atualizar funcionário." });
+  }
+});
+
+// ROTA PARA EXCLUIR UM FUNCIONÁRIO (DELETE)
+routes.delete('/funcionarios/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const funcionario = await prisma.funcionario.findUnique({ where: { id } });
+    
+    if (!funcionario) return res.status(404).json({ error: "Funcionário não encontrado." });
+
+    // O Delete Cascade do Prisma já limpa formacoes, experiencias e alocacoes associadas
+    await prisma.funcionario.delete({ where: { id } });
+    await prisma.user.delete({ where: { id: funcionario.userId } });
+
+    return res.json({ mensagem: "Funcionário excluído com sucesso!" });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Erro ao excluir funcionário." });
+  }
+});
+
 export default routes;
