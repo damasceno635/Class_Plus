@@ -13,7 +13,7 @@ const roleTranslations: Record<string, string> = {
 
 export default function Header() {
   const { user, logout } = useAuth();
-  const { darkMode, toggleTheme } = useTheme();
+  const { darkMode, toggleTheme, profileImage } = useTheme();
   const navigate = useNavigate();
 
   function handleLogout() {
@@ -103,8 +103,16 @@ export default function Header() {
               </span>
             </div>
 
-            <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center group-hover:scale-105 transition-transform">
-              <UserIcon size={20} />
+            <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center group-hover:scale-105 transition-transform overflow-hidden">
+              {profileImage ? (
+                <img 
+                  src={profileImage} 
+                  alt="Foto do perfil" 
+                  className="w-full h-full object-cover" 
+                />
+              ) : (
+                <UserIcon size={20} />
+              )}
             </div>
           </button>
 

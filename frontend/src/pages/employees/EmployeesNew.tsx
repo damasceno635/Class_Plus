@@ -13,6 +13,53 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../../services/api";
 
 /* ===================================================== */
+/* FORMATADORES (MÁSCARAS) */
+/* ===================================================== */
+
+const formatCPF = (value: string) => {
+  return value
+    .replace(/\D/g, "")
+    .slice(0, 11)
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+};
+
+const formatCelular = (value: string) => {
+  return value
+    .replace(/\D/g, "")
+    .slice(0, 11)
+    .replace(/(\d{2})(\d)/, "($1) $2")
+    .replace(/(\d{5})(\d)/, "$1-$2");
+};
+
+const formatCEP = (value: string) => {
+  return value
+    .replace(/\D/g, "")
+    .slice(0, 8)
+    .replace(/(\d{5})(\d)/, "$1-$2");
+};
+
+const formatCNPJ = (value: string) => {
+  return value
+    .replace(/\D/g, "")
+    .slice(0, 14)
+    .replace(/(\d{2})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1/$2")
+    .replace(/(\d{4})(\d)/, "$1-$2");
+};
+
+const formatMoeda = (value: string) => {
+  let v = value.replace(/\D/g, "");
+  if (!v) return "";
+  v = (parseInt(v, 10) / 100).toFixed(2);
+  v = v.replace(".", ",");
+  v = v.replace(/(\d)(?=(\d{3})+(?!\d))/g, "$1.");
+  return `R$ ${v}`;
+};
+
+/* ===================================================== */
 /* TYPES - TIPAGENS */
 /* ===================================================== */
 
@@ -87,6 +134,7 @@ export default function NovoFuncionario() {
     handleSubmit,
     watch,
     setValue,
+    formState: { errors },
   } = useForm<FuncionarioFormData>({
     defaultValues: {
       disciplinas: [],
@@ -123,6 +171,7 @@ export default function NovoFuncionario() {
   });
 
   const contrato = watch("contrato");
+  const vaga = watch("vaga");
 
   async function buscarCEP(cep: string) {
     const cepLimpo = cep.replace(/\D/g, "");
@@ -141,6 +190,11 @@ export default function NovoFuncionario() {
   }
 
   const onSubmit = async (data: FuncionarioFormData) => {
+    if (vaga === "Professor(a)" && data.disciplinas.length === 0) {
+      alert("É obrigatório adicionar pelo menos uma disciplina para o cargo de Professor(a).");
+      return;
+    }
+
     setSalvando(true);
     try {
       const formData = new FormData();
@@ -167,7 +221,12 @@ export default function NovoFuncionario() {
       formData.append("salario", data.salario);
       formData.append("pagamento", data.pagamento);
 
-      formData.append("disciplinas", JSON.stringify(data.disciplinas));
+      if (vaga === "Professor(a)") {
+        formData.append("disciplinas", JSON.stringify(data.disciplinas));
+      } else {
+        formData.append("disciplinas", JSON.stringify([]));
+      }
+      
       formData.append("formacoes", JSON.stringify(data.formacoes));
       formData.append("experiencias", JSON.stringify(data.experiencias));
 
@@ -205,58 +264,61 @@ export default function NovoFuncionario() {
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
             <Section title="Foto">
-              <FileInput label="Foto do Funcionário" register={register("foto")} />
+              <FileInput label="Foto do Funcionário" register={register("foto")} error={errors.foto?.message} />
             </Section>
 
             <Section title="Informações Básicas">
               <Grid>
-                <Select label="Status" register={register("status")} options={["Ativo", "Inativo"]} />
-                <Select label="Vaga" register={register("vaga")} options={["Professor(a)", "Coordenador(a)", "Secretário(a)", "Serviços Gerais"]} />
-                <Select label="Contrato" register={register("contrato")} options={["Indeterminado", "Determinado", "Experiência", "Temporário", "Intermitente", "Estágio"]} />
-                <Select label="Período" register={register("periodoContrato")} options={["Meio Período", "Integral"]} />
+                <Select label="Status" register={register("status", { required: "Campo obrigatório" })} options={["Ativo", "Inativo"]} error={errors.status?.message} />
+                <Select label="Vaga" register={register("vaga", { required: "Campo obrigatório" })} options={["Professor(a)", "Coordenador(a)", "Secretário(a)", "Serviços Gerais"]} error={errors.vaga?.message} />
+                <Select label="Contrato" register={register("contrato", { required: "Campo obrigatório" })} options={["Indeterminado", "Determinado", "Experiência", "Temporário", "Intermitente", "Estágio"]} error={errors.contrato?.message} />
+                <Select label="Período" register={register("periodoContrato", { required: "Campo obrigatório" })} options={["Meio Período", "Integral"]} error={errors.periodoContrato?.message} />
                 {contrato !== "Indeterminado" && (
-                  <Input type="date" label="Data Final Contrato" register={register("dataFimContrato")} />
+                  <Input type="date" label="Data Final Contrato" register={register("dataFimContrato", { required: "Campo obrigatório" })} error={errors.dataFimContrato?.message} />
                 )}
-                <Input label="Nome" register={register("nome")} />
-                <Input label="CPF" register={register("cpf")} />
-                <Input label="RA" register={register("ra")} />
-                <Input type="date" label="Nascimento" register={register("nascimento")} />
-                <Select label="Sexo" register={register("sexo")} options={["Masculino", "Feminino"]} />
-                <Input label="Celular" register={register("celular")} />
-                <Input label="Email" register={register("email")} />
+                <Input label="Nome" register={register("nome", { required: "Campo obrigatório" })} error={errors.nome?.message} />
+                <Input label="CPF" register={register("cpf", { required: "Campo obrigatório", onChange: (e) => e.target.value = formatCPF(e.target.value) })} error={errors.cpf?.message} />
+                <Input label="RA" register={register("ra", { required: "Campo obrigatório" })} error={errors.ra?.message} />
+                <Input type="date" label="Nascimento" register={register("nascimento", { required: "Campo obrigatório" })} error={errors.nascimento?.message} />
+                <Select label="Sexo" register={register("sexo", { required: "Campo obrigatório" })} options={["Masculino", "Feminino"]} error={errors.sexo?.message} />
+                <Input label="Celular" register={register("celular", { required: "Campo obrigatório", onChange: (e) => e.target.value = formatCelular(e.target.value) })} error={errors.celular?.message} />
+                <Input label="Email" type="email" register={register("email", { required: "Campo obrigatório" })} error={errors.email?.message} />
               </Grid>
             </Section>
 
             <Section title="Endereço">
               <Grid>
-                <Input label="CEP" register={register("cep")} onBlur={(e) => buscarCEP(e.target.value)} />
-                <Input label="Cidade" register={register("cidade")} />
-                <Input label="Estado" register={register("estado")} />
-                <Input label="Rua" register={register("rua")} />
-                <Input label="Bloco" register={register("bloco")} />
-                <Input label="Quadra" register={register("quadra")} />
-                <Input label="Número" register={register("numero")} />
+                <Input label="CEP" register={register("cep", { required: "Campo obrigatório", onChange: (e) => e.target.value = formatCEP(e.target.value) })} onBlur={(e) => buscarCEP(e.target.value)} error={errors.cep?.message} />
+                <Input label="Cidade" register={register("cidade", { required: "Campo obrigatório" })} error={errors.cidade?.message} />
+                <Input label="Estado" register={register("estado", { required: "Campo obrigatório" })} error={errors.estado?.message} />
+                <Input label="Rua" register={register("rua", { required: "Campo obrigatório" })} error={errors.rua?.message} />
+                <Input label="Bloco" register={register("bloco", { required: "Campo obrigatório" })} error={errors.bloco?.message} />
+                <Input label="Quadra" register={register("quadra", { required: "Campo obrigatório" })} error={errors.quadra?.message} />
+                <Input label="Número" register={register("numero", { required: "Campo obrigatório" })} error={errors.numero?.message} />
               </Grid>
             </Section>
 
-            <Section title="Disciplinas">
-              <button type="button" onClick={() => appendDisciplina({ disciplina: "", cargaHoraria: "", turma: "", serie: "", periodo: "" })} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-xl transition-all mb-5">
-                <Plus size={18} /> Adicionar Disciplina
-              </button>
-              <div className="space-y-5">
-                {disciplinaFields.map((field, index) => (
-                  <CardItem key={field.id} onRemove={() => removeDisciplina(index)}>
-                    <Grid>
-                      <Select label="Disciplina" register={register(`disciplinas.${index}.disciplina`, { required: "Preencha este campo." })} options={["Arte", "Biologia", "Educação Física", "Espanhol", "Filosofia", "Física", "Geografia", "História", "Inglês", "Matemática", "Português", "Sociologia"]} />
-                      <Select label="Carga Horária Semanal" register={register(`disciplinas.${index}.cargaHoraria`, { required: "Preencha este campo." })} options={["20h", "24h", "40h", "60h", "80h", "100h"]} />
-                      <Select label="Turma" register={register(`disciplinas.${index}.turma`, { required: "Preencha este campo." })} options={["1º Ano", "2º Ano", "3º Ano", "4º Ano", "5º Ano", "6º Ano", "7º Ano", "8º Ano", "9º Ano"]} />
-                      <Select label="Série" register={register(`disciplinas.${index}.serie`, { required: "Preencha este campo." })} options={["A", "B", "C", "D"]} />
-                      <Select label="Período" register={register(`disciplinas.${index}.periodo`)} options={["Matutino", "Vespertino", "Noturno"]} />
-                    </Grid>
-                  </CardItem>
-                ))}
-              </div>
-            </Section>
+            {vaga === "Professor(a)" && (
+              <Section title="Disciplinas">
+                <button type="button" onClick={() => appendDisciplina({ disciplina: "", cargaHoraria: "", turma: "", serie: "", periodo: "" })} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-xl transition-all mb-5">
+                  <Plus size={18} /> Adicionar Disciplina
+                </button>
+                {disciplinaFields.length === 0 && <p className="text-red-500 mb-4">Adicione pelo menos uma disciplina.</p>}
+                <div className="space-y-5">
+                  {disciplinaFields.map((field, index) => (
+                    <CardItem key={field.id} onRemove={() => removeDisciplina(index)}>
+                      <Grid>
+                        <Select label="Disciplina" register={register(`disciplinas.${index}.disciplina`, { required: "Campo obrigatório" })} options={["Arte", "Biologia", "Educação Física", "Espanhol", "Filosofia", "Física", "Geografia", "História", "Inglês", "Matemática", "Português", "Sociologia"]} error={errors.disciplinas?.[index]?.disciplina?.message} />
+                        <Select label="Carga Horária Semanal" register={register(`disciplinas.${index}.cargaHoraria`, { required: "Campo obrigatório" })} options={["20h", "24h", "40h", "60h", "80h", "100h"]} error={errors.disciplinas?.[index]?.cargaHoraria?.message} />
+                        <Select label="Turma" register={register(`disciplinas.${index}.turma`, { required: "Campo obrigatório" })} options={["1º Ano", "2º Ano", "3º Ano", "4º Ano", "5º Ano", "6º Ano", "7º Ano", "8º Ano", "9º Ano"]} error={errors.disciplinas?.[index]?.turma?.message} />
+                        <Select label="Série" register={register(`disciplinas.${index}.serie`, { required: "Campo obrigatório" })} options={["A", "B", "C", "D"]} error={errors.disciplinas?.[index]?.serie?.message} />
+                        <Select label="Período" register={register(`disciplinas.${index}.periodo`, { required: "Campo obrigatório" })} options={["Matutino", "Vespertino", "Noturno"]} error={errors.disciplinas?.[index]?.periodo?.message} />
+                      </Grid>
+                    </CardItem>
+                  ))}
+                </div>
+              </Section>
+            )}
 
             <Section title="Formações">
               <button type="button" onClick={() => appendFormacao({ instituicao: "", cnpj: "", modalidade: "", periodoInicio: "", periodoFinal: "" })} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-xl transition-all mb-5">
@@ -266,11 +328,11 @@ export default function NovoFuncionario() {
                 {formacaoFields.map((field, index) => (
                   <CardItem key={field.id} onRemove={() => removeFormacao(index)}>
                     <Grid>
-                      <Input label="Instituição" register={register(`formacoes.${index}.instituicao`)} />
-                      <Input label="CNPJ" register={register(`formacoes.${index}.cnpj`)} />
-                      <Select label="Modalidade" register={register(`formacoes.${index}.modalidade`)} options={["Presencial", "Remoto", "Híbrido"]} />
-                      <Input label="Período Inicial" type="date" register={register(`formacoes.${index}.periodoInicio`)} />
-                      <Input label="Período Final" type="date" register={register(`formacoes.${index}.periodoFinal`)} />
+                      <Input label="Instituição" register={register(`formacoes.${index}.instituicao`, { required: "Campo obrigatório" })} error={errors.formacoes?.[index]?.instituicao?.message} />
+                      <Input label="CNPJ" register={register(`formacoes.${index}.cnpj`, { required: "Campo obrigatório", onChange: (e) => e.target.value = formatCNPJ(e.target.value) })} error={errors.formacoes?.[index]?.cnpj?.message} />
+                      <Select label="Modalidade" register={register(`formacoes.${index}.modalidade`, { required: "Campo obrigatório" })} options={["Presencial", "Remoto", "Híbrido"]} error={errors.formacoes?.[index]?.modalidade?.message} />
+                      <Input label="Período Inicial" type="date" register={register(`formacoes.${index}.periodoInicio`, { required: "Campo obrigatório" })} error={errors.formacoes?.[index]?.periodoInicio?.message} />
+                      <Input label="Período Final" type="date" register={register(`formacoes.${index}.periodoFinal`, { required: "Campo obrigatório" })} error={errors.formacoes?.[index]?.periodoFinal?.message} />
                     </Grid>
                   </CardItem>
                 ))}
@@ -285,11 +347,11 @@ export default function NovoFuncionario() {
                 {experienciaFields.map((field, index) => (
                   <CardItem key={field.id} onRemove={() => removeExperiencia(index)}>
                     <Grid>
-                      <Input label="Empresa" register={register(`experiencias.${index}.empresa`)} />
-                      <Input label="CNPJ" register={register(`experiencias.${index}.cnpj`)} />
-                      <Select label="Modalidade" register={register(`experiencias.${index}.modalidade`)} options={["Presencial", "Remoto", "Híbrido"]} />
-                      <Input label="Período Inicial" type="date" register={register(`experiencias.${index}.periodoInicio`)} />
-                      <Input label="Período Final" type="date" register={register(`experiencias.${index}.periodoFinal`)} />
+                      <Input label="Empresa" register={register(`experiencias.${index}.empresa`, { required: "Campo obrigatório" })} error={errors.experiencias?.[index]?.empresa?.message} />
+                      <Input label="CNPJ" register={register(`experiencias.${index}.cnpj`, { required: "Campo obrigatório", onChange: (e) => e.target.value = formatCNPJ(e.target.value) })} error={errors.experiencias?.[index]?.cnpj?.message} />
+                      <Select label="Modalidade" register={register(`experiencias.${index}.modalidade`, { required: "Campo obrigatório" })} options={["Presencial", "Remoto", "Híbrido"]} error={errors.experiencias?.[index]?.modalidade?.message} />
+                      <Input label="Período Inicial" type="date" register={register(`experiencias.${index}.periodoInicio`, { required: "Campo obrigatório" })} error={errors.experiencias?.[index]?.periodoInicio?.message} />
+                      <Input label="Período Final" type="date" register={register(`experiencias.${index}.periodoFinal`, { required: "Campo obrigatório" })} error={errors.experiencias?.[index]?.periodoFinal?.message} />
                     </Grid>
                   </CardItem>
                 ))}
@@ -298,20 +360,20 @@ export default function NovoFuncionario() {
 
             <Section title="Financeiro">
               <Grid>
-                <Input label="Salário" register={register("salario")} />
-                <Select label="Pagamento" register={register("pagamento")} options={["Depósito", "Espécie", "PIX", "Cheque"]} />
+                <Input label="Salário" register={register("salario", { required: "Campo obrigatório", onChange: (e) => e.target.value = formatMoeda(e.target.value) })} error={errors.salario?.message} />
+                <Select label="Pagamento" register={register("pagamento", { required: "Campo obrigatório" })} options={["Depósito", "Espécie", "PIX", "Cheque"]} error={errors.pagamento?.message} />
               </Grid>
             </Section>
 
             <Section title="Documentos">
               <div className="space-y-5">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <FileInput label="RG" register={register("rgFuncionario")} />
-                  <FileInput label="Comprovante Residência" register={register("comprovanteResidencia")} />
+                  <FileInput label="RG" register={register("rgFuncionario")} error={errors.rgFuncionario?.message as string} />
+                  <FileInput label="Comprovante Residência" register={register("comprovanteResidencia")} error={errors.comprovanteResidencia?.message as string} />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <FileInput label="Diploma" register={register("diploma")} />
-                  <FileInput label="Referências" register={register("referencias")} />
+                  <FileInput label="Diploma" register={register("diploma")} error={errors.diploma?.message as string} />
+                  <FileInput label="Referências" register={register("referencias")} error={errors.referencias?.message as string} />
                 </div>
               </div>
             </Section>
@@ -383,18 +445,23 @@ interface InputProps {
   label: string;
   register: UseFormRegisterReturn;
   type?: string;
+  error?: string;
   onBlur?: (e: FocusEvent<HTMLInputElement>) => void;
 }
-function Input({ label, register, type = "text", onBlur }: InputProps) {
+function Input({ label, register, type = "text", error, onBlur }: InputProps) {
   return (
     <div className="flex flex-col gap-2">
       <label className="font-medium text-slate-700 dark:text-white">{label}</label>
       <input
         type={type}
         {...register}
-        onBlur={onBlur}
-        className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+        onBlur={(e) => {
+          register.onBlur(e);
+          if (onBlur) onBlur(e);
+        }}
+        className={`w-full p-3 rounded-xl border ${error ? "border-red-500 focus:ring-red-500" : "border-slate-300 dark:border-slate-700 focus:ring-blue-500"} bg-white dark:bg-slate-800 dark:text-white outline-none focus:ring-2 transition-all`}
       />
+      {error && <span className="text-sm text-red-500">{error}</span>}
     </div>
   );
 }
@@ -403,14 +470,15 @@ interface SelectProps {
   label: string;
   register: UseFormRegisterReturn;
   options: string[];
+  error?: string;
 }
-function Select({ label, register, options }: SelectProps) {
+function Select({ label, register, options, error }: SelectProps) {
   return (
     <div className="flex flex-col gap-2">
       <label className="font-medium text-slate-700 dark:text-white">{label}</label>
       <select
         {...register}
-        className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+        className={`w-full p-3 rounded-xl border ${error ? "border-red-500 focus:ring-red-500" : "border-slate-300 dark:border-slate-700 focus:ring-blue-500"} bg-white dark:bg-slate-800 dark:text-white outline-none focus:ring-2 transition-all`}
       >
         <option value="">Selecione</option>
         {options.map((option) => (
@@ -419,6 +487,7 @@ function Select({ label, register, options }: SelectProps) {
           </option>
         ))}
       </select>
+      {error && <span className="text-sm text-red-500">{error}</span>}
     </div>
   );
 }
@@ -426,16 +495,18 @@ function Select({ label, register, options }: SelectProps) {
 interface FileInputProps {
   label: string;
   register?: UseFormRegisterReturn;
+  error?: string;
 }
-function FileInput({ label, register }: FileInputProps) {
+function FileInput({ label, register, error }: FileInputProps) {
   return (
     <div className="flex flex-col gap-2">
       <label className="font-medium text-slate-700 dark:text-white">{label}</label>
       <input
         type="file"
         {...register}
-        className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-700 dark:text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:bg-blue-600 file:text-white hover:file:bg-blue-700 file:transition-all file:cursor-pointer"
+        className={`w-full p-2 border ${error ? "border-red-500" : "border-slate-300 dark:border-slate-600"} rounded-xl text-slate-700 dark:text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:bg-blue-600 file:text-white hover:file:bg-blue-700 file:transition-all file:cursor-pointer`}
       />
+      {error && <span className="text-sm text-red-500">{error}</span>}
     </div>
   );
 }
