@@ -75,7 +75,7 @@ export default function Sidebar() {
       label: "Roteiro de Aula",
       icon: <BookOpen size={20} />,
       path: "/roteiro-aula",
-      roles: ["admin", "coordinator", "teacher"],
+      roles: ["admin", "secretary", "coordinator", "teacher", "student"],
     },
     {
       label: "Calendário Escolar",

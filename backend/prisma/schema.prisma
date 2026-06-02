@@ -24,6 +24,7 @@ model User {
   // Relação: um usuário pode ser um aluno
   aluno       Aluno?
   funcionario Funcionario?
+  roteiros    Roteiro[]
 
   @@map("users") // Nome da tabela no banco
 }
@@ -205,4 +206,40 @@ model Alocacao {
   turma         Turma @relation(fields: [turmaId], references: [id], onDelete: Cascade)
 
   @@map("alocacoes_disciplinas")
+}
+
+// Módulo de Calendário - Agenda Escolar
+model Evento {
+  id            String   @id @default(uuid())
+  titulo        String
+  descricao     String
+  data          String   // Formato "YYYY-MM-DD"
+  tipo          String   // "academic", "administrative", "holiday", "meeting"
+  horarioInicio String   // Formato "HH:mm"
+  horarioFim    String   // Formato "HH:mm"
+  
+  criadoEm      DateTime @default(now())
+
+  @@map("eventos")
+}
+
+// Módulo de Roteiros de Aula
+model Roteiro {
+  id                  String   @id @default(uuid())
+  titulo              String
+  disciplina          String
+  turma               String
+  dataAplicacao       String
+  status              String   // "Rascunho", "Pendente", "Aprovado", "Rejeitado"
+  conteudo            String
+  metodologia         String
+  feedbackCoordenador String?
+
+  // Ligação com quem criou (o Professor)
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  criadoEm            DateTime @default(now())
+
+  @@map("roteiros")
 }

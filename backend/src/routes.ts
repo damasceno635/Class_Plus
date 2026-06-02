@@ -21,10 +21,19 @@ type AlunoCompleto = Prisma.AlunoGetPayload<{
   };
 }>;
 
+// Tipagem do Prisma para Funcionário (com todas as relações)
+type FuncionarioCompleto = Prisma.FuncionarioGetPayload<{
+  include: {
+    user: true;
+    formacoes: true;
+    experiencias: true;
+    alocacoes: { include: { turma: true } };
+  };
+}>;
+
 // =========================
 // 1. REGISTRO
 // =========================
-
 routes.post('/registro', async (req, res: Response) => {
   const { nome, email, senha, cargo } = req.body;
 
@@ -54,7 +63,6 @@ routes.post('/registro', async (req, res: Response) => {
 // =========================
 // 2. LOGIN
 // =========================
-
 routes.post('/login', async (req, res: Response) => {
   const { email, senha } = req.body;
 
@@ -87,7 +95,6 @@ routes.post('/login', async (req, res: Response) => {
 // =========================
 // 3. PERFIL
 // =========================
-
 routes.get('/perfil', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const user = await prisma.user.findUnique({ where: { id: req.userId } });
@@ -109,7 +116,6 @@ routes.get('/perfil', authMiddleware, async (req: AuthRequest, res: Response) =>
 // =========================
 // 4. CADASTRAR ALUNO
 // =========================
-
 routes.post('/alunos', authMiddleware, upload.any(), async (req: AuthRequest, res: Response) => {
   try {
     const {
@@ -189,7 +195,6 @@ routes.post('/alunos', authMiddleware, upload.any(), async (req: AuthRequest, re
 // =========================
 // 5. LISTAR ALUNOS
 // =========================
-
 routes.get('/alunos', authMiddleware, async (_req, res: Response) => {
   try {
     const alunos = await prisma.aluno.findMany({
@@ -218,7 +223,6 @@ routes.get('/alunos', authMiddleware, async (_req, res: Response) => {
 // =========================
 // 6. BUSCAR ALUNO POR ID
 // =========================
-
 routes.get('/alunos/:id', authMiddleware, async (req, res: Response) => {
   try {
     const id = String(req.params.id);
@@ -276,7 +280,6 @@ routes.get('/alunos/:id', authMiddleware, async (req, res: Response) => {
 // =========================
 // 7. EDITAR ALUNO
 // =========================
-
 routes.put('/alunos/:id', authMiddleware, upload.any(), async (req: AuthRequest, res: Response) => {
   try {
     const id = String(req.params.id);
@@ -312,8 +315,7 @@ routes.put('/alunos/:id', authMiddleware, upload.any(), async (req: AuthRequest,
       data: { nome, email }
     });
 
-    // Prepara a atualização dos documentos (concatena os novos)
-    const documentosAtuais = alunoAtual.documentos || [];
+    const documentosAtuais = Array.isArray(alunoAtual.documentos) ? alunoAtual.documentos : [];
     const documentosAtualizados = [...documentosAtuais, ...novosDocumentos];
 
     await prisma.aluno.update({
@@ -334,7 +336,7 @@ routes.put('/alunos/:id', authMiddleware, upload.any(), async (req: AuthRequest,
         bloco,
         quadra,
         numero,
-        ...(nomeArquivoFoto && { fotoUrl: nomeArquivoFoto }),
+        ...(nomeArquivoFoto ? { fotoUrl: nomeArquivoFoto } : {}),
         documentos: documentosAtualizados,
         responsaveis: { deleteMany: {}, create: listaResponsaveis },
         deficiencias: { deleteMany: {}, create: listaDeficiencias },
@@ -352,7 +354,6 @@ routes.put('/alunos/:id', authMiddleware, upload.any(), async (req: AuthRequest,
 // =========================
 // 8. EXCLUIR ALUNO
 // =========================
-
 routes.delete('/alunos/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const id = String(req.params.id);
@@ -498,7 +499,7 @@ routes.get('/funcionarios/:id', authMiddleware, async (req, res) => {
         experiencias: true,
         alocacoes: { include: { turma: true } }
       }
-    });
+    }) as FuncionarioCompleto | null;
 
     if (!funcionario) return res.status(404).json({ error: 'Funcionário não encontrado.' });
 
@@ -592,8 +593,7 @@ routes.put('/funcionarios/:id', authMiddleware, upload.any(), async (req: AuthRe
     const listaExperiencias = experiencias ? JSON.parse(experiencias) : [];
     const listaDisciplinas = disciplinas ? JSON.parse(disciplinas) : [];
 
-    // Concatena documentos novos com os existentes
-    const documentosAtuais = funcionarioAtual.documentos || [];
+    const documentosAtuais = Array.isArray(funcionarioAtual.documentos) ? funcionarioAtual.documentos : [];
     const documentosAtualizados = [...documentosAtuais, ...novosDocumentos];
 
     await prisma.$transaction(async (tx) => {
@@ -610,14 +610,13 @@ routes.put('/funcionarios/:id', authMiddleware, upload.any(), async (req: AuthRe
           cpf, ra, nascimento, sexo, celular,
           cep, cidade, estado, rua, bloco: bloco || '', quadra: quadra || '', numero,
           salario, pagamento,
-          ...(nomeArquivoFoto && { fotoUrl: nomeArquivoFoto }),
+          ...(nomeArquivoFoto ? { fotoUrl: nomeArquivoFoto } : {}),
           documentos: documentosAtualizados,
           formacoes: { deleteMany: {}, create: listaFormacoes },
           experiencias: { deleteMany: {}, create: listaExperiencias }
         }
       });
 
-      // Remove alocações antigas e recria
       await tx.alocacao.deleteMany({ where: { funcionarioId: id } });
       for (const disc of listaDisciplinas) {
         let turma = await tx.turma.findUnique({
@@ -708,6 +707,148 @@ routes.put('/perfil', authMiddleware, upload.single('foto'), async (req: AuthReq
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'Erro ao atualizar perfil.' });
+  }
+});
+
+// ==========================================
+// ROTAS DE EVENTOS
+// ==========================================
+routes.post('/eventos', authMiddleware, async (req, res) => {
+  try {
+    const { titulo, descricao, data, tipo, horarioInicio, horarioFim } = req.body;
+    const novoEvento = await prisma.evento.create({
+      data: { titulo, descricao, data, tipo, horarioInicio, horarioFim }
+    });
+    return res.status(201).json(novoEvento);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Erro ao criar evento." });
+  }
+});
+
+routes.get('/eventos', authMiddleware, async (req, res) => {
+  try {
+    const eventos = await prisma.evento.findMany({ orderBy: { data: 'asc' } });
+    return res.json(eventos);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Erro ao buscar eventos." });
+  }
+});
+
+routes.put('/eventos/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { titulo, descricao, data, tipo, horarioInicio, horarioFim } = req.body;
+    const eventoAtualizado = await prisma.evento.update({
+      where: { id },
+      data: { titulo, descricao, data, tipo, horarioInicio, horarioFim }
+    });
+    return res.json(eventoAtualizado);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Erro ao atualizar evento." });
+  }
+});
+
+routes.delete('/eventos/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await prisma.evento.delete({ where: { id } });
+    return res.json({ mensagem: "Evento excluído com sucesso!" });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Erro ao excluir evento." });
+  }
+});
+
+// ==========================================
+// ROTAS DE ROTEIROS (PLANOS DE AULA)
+// ==========================================
+routes.post('/roteiros', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { titulo, disciplina, turma, dataAplicacao, status, conteudo, metodologia } = req.body;
+    const novo = await prisma.roteiro.create({
+      data: {
+        titulo, disciplina, turma, dataAplicacao, status, conteudo, metodologia,
+        userId: req.userId!
+      }
+    });
+    return res.status(201).json(novo);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Erro ao criar roteiro." });
+  }
+});
+
+routes.get('/roteiros', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.userId } });
+    let roteiros = [];
+
+    if (user?.cargo === 'teacher') {
+      roteiros = await prisma.roteiro.findMany({
+        where: { userId: req.userId },
+        include: { user: true },
+        orderBy: { criadoEm: 'desc' }
+      });
+    } else if (user?.cargo === 'admin') {
+      roteiros = await prisma.roteiro.findMany({
+        where: { status: 'Aprovado' },
+        include: { user: true },
+        orderBy: { criadoEm: 'desc' }
+      });
+    } else {
+      roteiros = await prisma.roteiro.findMany({
+        where: { status: { not: 'Rascunho' } },
+        include: { user: true },
+        orderBy: { criadoEm: 'desc' }
+      });
+    }
+
+    const formatados = roteiros.map(r => ({
+      id: r.id,
+      professor: r.user.nome,
+      titulo: r.titulo,
+      disciplina: r.disciplina,
+      turma: r.turma,
+      dataAplicacao: r.dataAplicacao,
+      status: r.status,
+      conteudo: r.conteudo,
+      metodologia: r.metodologia,
+      feedbackCoordenador: r.feedbackCoordenador
+    }));
+
+    return res.json(formatados);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Erro ao buscar roteiros." });
+  }
+});
+
+routes.put('/roteiros/:id', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const { titulo, disciplina, turma, dataAplicacao, status, conteudo, metodologia, feedbackCoordenador } = req.body;
+
+    const data: any = {};
+    if (titulo !== undefined) data.titulo = titulo;
+    if (disciplina !== undefined) data.disciplina = disciplina;
+    if (turma !== undefined) data.turma = turma;
+    if (dataAplicacao !== undefined) data.dataAplicacao = dataAplicacao;
+    if (status !== undefined) data.status = status;
+    if (conteudo !== undefined) data.conteudo = conteudo;
+    if (metodologia !== undefined) data.metodologia = metodologia;
+    if (feedbackCoordenador !== undefined) data.feedbackCoordenador = feedbackCoordenador;
+
+    const roteiro = await prisma.roteiro.update({
+      where: { id },
+      data
+    });
+    return res.json(roteiro);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Erro ao atualizar roteiro." });
   }
 });
 

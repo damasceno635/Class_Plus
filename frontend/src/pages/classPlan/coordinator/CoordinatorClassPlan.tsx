@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import type { ReactNode } from "react";
 import { 
   Eye, 
@@ -14,6 +14,7 @@ import {
 import Sidebar from "../../../components/layout/Sidebar";
 import Header from "../../../components/layout/Header";
 import Footer from "../../../components/layout/Footer";
+import { api } from "../../../services/api";
 
 type StatusRoteiro = "Pendente" | "Aprovado" | "Rejeitado";
 
@@ -29,44 +30,6 @@ interface Roteiro {
   metodologia: string;
   feedbackCoordenador?: string;
 }
-
-const MOCK_ROTEIROS: Roteiro[] = [
-  {
-    id: "1",
-    professor: "Maria Silva",
-    titulo: "Introdução à Álgebra e Equações de 1º Grau",
-    disciplina: "Matemática",
-    turma: "8º Ano A",
-    dataAplicacao: "2026-05-25",
-    status: "Aprovado",
-    conteudo: "Conceito de variáveis, incógnitas e resolução de equações simples.",
-    metodologia: "Aula expositiva dialogada seguida de resolução de exercícios em grupos no quadro.",
-    feedbackCoordenador: "Excelente cronograma de atividades. Foco muito bom na prática em grupo."
-  },
-  {
-    id: "2",
-    professor: "Carlos Ferreira",
-    titulo: "Óptica Geométrica: Reflexão da Luz",
-    disciplina: "Física",
-    turma: "2º Ano B",
-    dataAplicacao: "2026-05-28",
-    status: "Pendente",
-    conteudo: "Leis da reflexão, espelhos planos e formação de imagens.",
-    metodologia: "Uso de simuladores virtuais (PhET) projetados no retroprojetor e roteiro de experimentos práticos com laser."
-  },
-  {
-    id: "3",
-    professor: "Ana Costa",
-    titulo: "Cinemática Escalar Avançada",
-    disciplina: "Física",
-    turma: "3º Ano C",
-    dataAplicacao: "2026-05-20",
-    status: "Rejeitado",
-    conteudo: "Movimento uniformemente variado e gráficos de aceleração.",
-    metodologia: "Apenas leitura do livro didático das páginas 45 a 60 durante as duas aulas.",
-    feedbackCoordenador: "A metodologia proposta está muito passiva para uma turma de terceiro ano. Por favor, adicione uma dinâmica ativa ou resolução de questões de exames nacionais para enriquecer o plano."
-  }
-];
 
 const statusStylesMap: Record<StatusRoteiro, { bg: string; text: string; icon: ReactNode }> = {
   Aprovado: {
@@ -87,38 +50,54 @@ const statusStylesMap: Record<StatusRoteiro, { bg: string; text: string; icon: R
 };
 
 export default function CoordinatorClassPlan() {
-  const [roteiros, setRoteiros] = useState<Roteiro[]>(MOCK_ROTEIROS);
+  const [roteiros, setRoteiros] = useState<Roteiro[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  
   const [selectedRoteiro, setSelectedRoteiro] = useState<Roteiro | null>(null);
   const [feedbackText, setFeedbackText] = useState("");
+
+  useEffect(() => {
+    async function fetchRoteiros() {
+      try {
+        const response = await api.get('/roteiros');
+        setRoteiros(response.data);
+      } catch (error) { console.error(error); }
+    }
+    fetchRoteiros();
+  }, []);
 
   const filteredRoteiros = useMemo(() => {
     const term = searchTerm.toLowerCase().trim();
     if (!term) return roteiros;
     return roteiros.filter(
       (r) =>
-        r.titulo.toLowerCase().includes(term) ||
         r.professor.toLowerCase().includes(term) ||
+        r.titulo.toLowerCase().includes(term) ||
         r.turma.toLowerCase().includes(term)
     );
   }, [roteiros, searchTerm]);
 
-  const handleAvaliar = (status: "Aprovado" | "Rejeitado") => {
+  const handleAvaliar = async (status: "Aprovado" | "Rejeitado") => {
     if (status === "Rejeitado" && !feedbackText.trim()) {
-      alert("Para rejeitar um roteiro, é obrigatório fornecer um feedback ao professor.");
+      alert("Para rejeitar um roteiro, é obrigatório fornecer um feedback.");
       return;
     }
 
-    setRoteiros((prev) => 
-      prev.map((r) => 
-        r.id === selectedRoteiro?.id 
-          ? { ...r, status, feedbackCoordenador: feedbackText } 
-          : r
-      )
-    );
-    setSelectedRoteiro(null);
-    setFeedbackText("");
+    try {
+      await api.put(`/roteiros/${selectedRoteiro?.id}`, {
+        status,
+        feedbackCoordenador: feedbackText
+      });
+
+      setRoteiros((prev) => 
+        prev.map((r) => 
+          r.id === selectedRoteiro?.id ? { ...r, status, feedbackCoordenador: feedbackText } : r
+        )
+      );
+      setSelectedRoteiro(null);
+      setFeedbackText("");
+    } catch (error) {
+      alert("Erro ao enviar avaliação.");
+    }
   };
 
   const abrirModal = (roteiro: Roteiro) => {
@@ -202,7 +181,6 @@ export default function CoordinatorClassPlan() {
           </div>
         </main>
 
-        {/* Modal de Avaliação */}
         {selectedRoteiro && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-3xl p-6 md:p-8 shadow-2xl border border-slate-200 dark:border-slate-800 max-h-[90vh] overflow-y-auto">
@@ -238,7 +216,6 @@ export default function CoordinatorClassPlan() {
                 </div>
               </div>
 
-              {/* Área de Feedback e Ação */}
               <div className="border-t border-slate-200 dark:border-slate-800 pt-6">
                 {selectedRoteiro.status === "Pendente" ? (
                   <div className="space-y-4">
@@ -274,7 +251,6 @@ export default function CoordinatorClassPlan() {
                   </div>
                 )}
               </div>
-
             </div>
           </div>
         )}

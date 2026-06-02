@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-//import type { ReactNode } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { api } from "../../services/api";
 import {
   ChevronLeft,
   ChevronRight,
@@ -33,49 +33,6 @@ interface Evento {
   horarioInicio: string;
   horarioFim: string;
 }
-
-/* ===================================================== */
-/* MOCK INITIAL DATA                                     */
-/* ===================================================== */
-
-const MOCK_EVENTOS: Evento[] = [
-  {
-    id: "1",
-    titulo: "Conselho de Classe - 1º Bimestre",
-    descricao: "Reunião deliberativa com todos os professores e coordenadores pedagógicos.",
-    data: "2026-05-22",
-    tipo: "meeting",
-    horarioInicio: "14:00",
-    horarioFim: "17:30",
-  },
-  {
-    id: "2",
-    titulo: "Início das Provas Bimestrais",
-    descricao: "Aplicação das avaliações oficiais do Ensino Médio e Fundamental.",
-    data: "2026-05-25",
-    tipo: "academic",
-    horarioInicio: "07:30",
-    horarioFim: "12:00",
-  },
-  {
-    id: "3",
-    titulo: "Feriado Nacional",
-    descricao: "Recesso escolar institucional devido ao feriado nacional.",
-    data: "2026-05-01",
-    tipo: "holiday",
-    horarioInicio: "00:00",
-    horarioFim: "23:59",
-  },
-  {
-    id: "4",
-    titulo: "Renovação de Bolsas de Estudo",
-    descricao: "Prazo limite para entrega da documentação socioeconômica na secretaria.",
-    data: "2026-05-15",
-    tipo: "administrative",
-    horarioInicio: "08:00",
-    horarioFim: "18:00",
-  },
-];
 
 const tipoStylesMap: Record<TipoEvento, { bg: string; text: string; label: string; dot: string }> = {
   academic: {
@@ -118,32 +75,44 @@ export default function Calendar() {
   const { user } = useAuth();
   const isAdmin = user?.cargo === "admin";
 
-  // Estados do Controle de Datas
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 4, 1)); // Iniciando em Maio de 2026 conforme mocks
-  const [selectedDateStr, setSelectedDateStr] = useState<string>(
-    new Date(2026, 4, 21).toISOString().split("T")[0] // Dia atual padrão baseado no contexto do projeto
-  );
+  // Estados de navegação do calendário
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDateStr, setSelectedDateStr] = useState<string>(() => {
+    const hoje = new Date();
+    return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}-${String(hoje.getDate()).padStart(2, "0")}`;
+  });
 
   // Estados dos Eventos
-  const [eventos, setEventos] = useState<Evento[]>(MOCK_EVENTOS);
+  const [eventos, setEventos] = useState<Evento[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<Evento | null>(null);
 
-  // Estados dos Modais
+  // Estados do Modal de Formulário (Criar/Editar)
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<Evento | null>(null);
-
-  // Estados do Formulário
   const [formTitulo, setFormTitulo] = useState("");
   const [formDescricao, setFormDescricao] = useState("");
-  const [formDate, setFormDate] = useState("");
+  const [formDate, setFormDate] = useState(selectedDateStr);
   const [formTipo, setFormTipo] = useState<TipoEvento>("academic");
   const [formInicio, setFormInicio] = useState("08:00");
   const [formFim, setFormFim] = useState("09:00");
 
+  // BUSCAR DO BACKEND AO ABRIR O CALENDÁRIO
+  useEffect(() => {
+    async function carregarEventos() {
+      try {
+        const response = await api.get('/eventos');
+        setEventos(response.data);
+      } catch (error) {
+        console.error("Erro ao carregar os eventos:", error);
+      }
+    }
+    carregarEventos();
+  }, []);
+
   const ano = currentDate.getFullYear();
   const mes = currentDate.getMonth();
 
-  // Cálculos Calendário Vanilla
+  // Cálculos Calendário
   const diasNoMes = new Date(ano, mes + 1, 0).getDate();
   const primeiroDiaSemana = new Date(ano, mes, 1).getDay();
 
@@ -161,7 +130,7 @@ export default function Calendar() {
     return mapa;
   }, [eventos]);
 
-  // Eventos do dia selecionado lateral/inferior
+  // Eventos do dia selecionado
   const eventosDoDiaSelecionado = useMemo(() => {
     return eventosPorData[selectedDateStr] || [];
   }, [eventosPorData, selectedDateStr]);
@@ -180,7 +149,7 @@ export default function Calendar() {
 
   // Abrir modal para Editar
   const handleOpenEdit = (evento: Evento, e: React.MouseEvent) => {
-    e.stopPropagation(); // Previne abrir o modal de visualização comum
+    e.stopPropagation();
     setEditingEvent(evento);
     setFormTitulo(evento.titulo);
     setFormDescricao(evento.descricao);
@@ -191,62 +160,61 @@ export default function Calendar() {
     setIsFormModalOpen(true);
   };
 
-  // Salvar formulário (Criação ou Edição)
-  const handleSaveEvent = (e: React.FormEvent) => {
+  const handleSaveEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formTitulo.trim() || !formDate) return;
 
-    if (editingEvent) {
-      // Editar
-      setEventos((prev) =>
-        prev.map((ev) =>
-          ev.id === editingEvent.id
-            ? {
-                ...ev,
-                titulo: formTitulo,
-                descricao: formDescricao,
-                data: formDate,
-                tipo: formTipo,
-                horarioInicio: formInicio,
-                horarioFim: formFim,
-              }
-            : ev
-        )
-      );
-    } else {
-      // Criar
-      const novo: Evento = {
-        id: String(Date.now()),
-        titulo: formTitulo,
-        descricao: formDescricao,
-        data: formDate,
-        tipo: formTipo,
-        horarioInicio: formInicio,
-        horarioFim: formFim,
-      };
-      setEventos((prev) => [...prev, novo]);
+    try {
+      if (editingEvent) {
+        // EDITAR (PUT)
+        const response = await api.put(`/eventos/${editingEvent.id}`, {
+          titulo: formTitulo,
+          descricao: formDescricao,
+          data: formDate,
+          tipo: formTipo,
+          horarioInicio: formInicio,
+          horarioFim: formFim,
+        });
+        setEventos((prev) => prev.map((ev) => (ev.id === editingEvent.id ? response.data : ev)));
+      } else {
+        // CRIAR (POST)
+        const response = await api.post('/eventos', {
+          titulo: formTitulo,
+          descricao: formDescricao,
+          data: formDate,
+          tipo: formTipo,
+          horarioInicio: formInicio,
+          horarioFim: formFim,
+        });
+        setEventos((prev) => [...prev, response.data]);
+      }
+      setIsFormModalOpen(false);
+      setEditingEvent(null);
+    } catch (error) {
+      console.error("Erro ao salvar evento:", error);
+      alert("Erro ao comunicar com o servidor.");
     }
-
-    setIsFormModalOpen(false);
-    setEditingEvent(null);
   };
 
-  // Excluir Evento
-  const handleDeleteEvent = (id: string, e: React.MouseEvent) => {
+  const handleDeleteEvent = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (confirm("Deseja realmente remover este evento do calendário?")) {
-      setEventos((prev) => prev.filter((ev) => ev.id !== id));
-      if (selectedEvent?.id === id) setSelectedEvent(null);
+      try {
+        await api.delete(`/eventos/${id}`);
+        setEventos((prev) => prev.filter((ev) => ev.id !== id));
+        if (selectedEvent?.id === id) setSelectedEvent(null);
+      } catch (error) {
+        console.error("Erro ao excluir evento:", error);
+        alert("Erro ao excluir evento.");
+      }
     }
   };
 
   return (
     <div className="flex min-h-screen bg-slate-100 dark:bg-slate-950">
       <Sidebar />
-
       <div className="flex-1 flex flex-col min-w-0">
         <Header />
-
         <main className="flex-1 p-4 md:p-8 max-w-[1600px] mx-auto w-full min-w-0 flex flex-col lg:flex-row gap-6">
           
           {/* SEÇÃO DA ESQUERDA: GRID DO CALENDÁRIO */}

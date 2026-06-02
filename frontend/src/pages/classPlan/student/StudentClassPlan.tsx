@@ -5,6 +5,8 @@ import Sidebar from "../../../components/layout/Sidebar";
 import Header from "../../../components/layout/Header";
 import Footer from "../../../components/layout/Footer";
 import { api } from "../../../services/api";
+
+// @ts-ignore
 import html2pdf from "html2pdf.js";
 
 interface Roteiro {
@@ -13,7 +15,7 @@ interface Roteiro {
   conteudo: string; metodologia: string;
 }
 
-export default function AdminClassPlan() {
+export default function StudentClassPlan() {
   const [roteiros, setRoteiros] = useState<Roteiro[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRoteiro, setSelectedRoteiro] = useState<Roteiro | null>(null);
@@ -23,7 +25,7 @@ export default function AdminClassPlan() {
     async function fetchRoteiros() {
       try {
         const response = await api.get('/roteiros');
-        setRoteiros(response.data); // A API já filtra e só devolve os "Aprovados" para o Admin
+        setRoteiros(response.data);
       } catch (error) {
         console.error("Erro ao carregar roteiros", error);
       }
