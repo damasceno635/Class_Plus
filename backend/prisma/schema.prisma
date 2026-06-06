@@ -65,6 +65,8 @@ model Aluno {
   responsaveis  Responsavel[]
   deficiencias  Deficiencia[]
   alergias      Alergia[]
+  frequencias   Frequencia[]
+  notas         Nota[]
 
   @@map("alunos")
 }
@@ -204,6 +206,8 @@ model Alocacao {
   
   turmaId       String
   turma         Turma @relation(fields: [turmaId], references: [id], onDelete: Cascade)
+  frequencias   Frequencia[]
+  notas         Nota[]
 
   @@map("alocacoes_disciplinas")
 }
@@ -242,4 +246,41 @@ model Roteiro {
   criadoEm            DateTime @default(now())
 
   @@map("roteiros")
+}
+
+// Módulo de Diário de Classe e Notas
+model Frequencia {
+  id          String   @id @default(uuid())
+  data        String   // "2026-05-20"
+  presente    Boolean
+  observacao  String?
+  
+  alunoId     String
+  aluno       Aluno    @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+  
+  alocacaoId  String
+  alocacao    Alocacao @relation(fields: [alocacaoId], references: [id], onDelete: Cascade)
+
+  // Garante que não temos duas presenças gravadas para o mesmo aluno, na mesma aula, no mesmo dia
+  @@unique([alunoId, alocacaoId, data])
+  @@map("frequencias")
+}
+
+model Nota {
+  id          String   @id @default(uuid())
+  bimestre    String   // "1º Bimestre"
+  n1          String?
+  n2          String?
+  n3          String?
+  n4          String?
+  
+  alunoId     String
+  aluno       Aluno    @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+  
+  alocacaoId  String
+  alocacao    Alocacao @relation(fields: [alocacaoId], references: [id], onDelete: Cascade)
+
+  // Garante que um aluno só tem um boletim por bimestre naquela disciplina
+  @@unique([alunoId, alocacaoId, bimestre])
+  @@map("notas")
 }

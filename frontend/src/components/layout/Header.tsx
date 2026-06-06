@@ -2,6 +2,8 @@ import { LogOut, User as UserIcon, Moon, Sun, Bell } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useNavigate } from "react-router-dom";
+import { useEffect } from "react";
+import { api } from "../../services/api";
 
 const roleTranslations: Record<string, string> = {
   admin: "Administrador",
@@ -13,10 +15,27 @@ const roleTranslations: Record<string, string> = {
 
 export default function Header() {
   const { user, logout } = useAuth();
-  const { darkMode, toggleTheme, profileImage } = useTheme();
+  const { darkMode, toggleTheme, profileImage, setProfileImage } = useTheme();
   const navigate = useNavigate();
 
+  // MÁGICA ATUALIZADA: Agora ele escuta a mudança de "user?.id". 
+  // Sempre que alguém novo logar, ele força a atualização (com foto ou null).
+  useEffect(() => {
+    if (user) {
+      api.get('/perfil')
+        .then(response => {
+          // Se tiver foto ele põe, se não tiver ele limpa a que estava lá!
+          setProfileImage(response.data.fotoUrl || '');
+        })
+        .catch(error => console.error("Erro ao carregar foto no header:", error));
+    } else {
+      // Se não tem user (saiu), garante que a foto está limpa
+      setProfileImage('');
+    }
+  }, [user?.id, setProfileImage]);
+
   function handleLogout() {
+    setProfileImage(''); // Limpa a memória instantaneamente ao sair
     logout();
     navigate("/");
   }
@@ -37,51 +56,17 @@ export default function Header() {
 
         {/* NOTIFICAÇÃO */}
         <button
-          className="
-            relative
-            p-3
-            rounded-xl
-            bg-slate-100
-            dark:bg-slate-800
-            hover:scale-105
-            transition-all
-          "
+          className="relative p-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:scale-105 transition-all"
         >
-          <Bell
-            size={20}
-            className="
-              text-slate-700
-              dark:text-white
-            "
-          />
-
-          <span
-            className="
-              absolute
-              -top-1
-              -right-1
-              w-3
-              h-3
-              rounded-full
-              bg-red-500
-            "
-          />
+          <Bell size={20} className="text-slate-700 dark:text-white" />
+          <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-red-500" />
         </button>
 
         {/* BOTÃO TEMA */}
         <button
           onClick={toggleTheme}
           aria-label="Alternar tema"
-          className="
-            p-3
-            rounded-xl
-            bg-slate-100
-            dark:bg-slate-800
-            hover:scale-105
-            transition-all
-            text-slate-700
-            dark:text-white
-          "
+          className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:scale-105 transition-all text-slate-700 dark:text-white"
         >
           {darkMode ? <Sun size={20} /> : <Moon size={20} />}
         </button>

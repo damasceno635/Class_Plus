@@ -1,15 +1,9 @@
-import { useState } from "react";
-import { 
-  Building2, 
-  TrendingUp, 
-  Award, 
-  ShieldAlert, 
-  ChevronRight,
-  BookOpen
-} from "lucide-react";
+import { useState, useEffect } from "react";
+import { Building2, TrendingUp, ShieldAlert, ChevronRight, BookOpen, Loader2 } from "lucide-react";
 import Sidebar from "../../../components/layout/Sidebar";
 import Header from "../../../components/layout/Header";
 import Footer from "../../../components/layout/Footer";
+import { api } from "../../../services/api";
 
 interface SegmentoMetrics {
   nome: string;
@@ -18,13 +12,31 @@ interface SegmentoMetrics {
   totalAlunos: number;
 }
 
-const MOCK_SEGMENTOS: SegmentoMetrics[] = [
-  { nome: "Ensino Fundamental II (6º ao 9º Ano)", mediaGeral: 7.4, taxaAprovacao: 89, totalAlunos: 680 },
-  { nome: "Ensino Médio (1º ao 3º Ano)", mediaGeral: 8.1, taxaAprovacao: 94, totalAlunos: 560 },
-];
-
 export default function AdminPerformance() {
-  const [segmentos] = useState<SegmentoMetrics[]>(MOCK_SEGMENTOS);
+  const [loading, setLoading] = useState(true);
+  const [global, setGlobal] = useState({ evasao: "0.0", media: "0.0", corte: "6.0" });
+  const [segmentos, setSegmentos] = useState<SegmentoMetrics[]>([]);
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const response = await api.get('/metricas/admin');
+        setGlobal(response.data.global);
+        setSegmentos(response.data.segmentos);
+      } catch (error) {
+        console.error("Erro ao buscar métricas", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen bg-slate-100 dark:bg-slate-950"><Sidebar /><div className="flex-1 flex flex-col min-w-0"><Header /><main className="flex-1 flex items-center justify-center"><Loader2 className="animate-spin h-10 w-10 text-blue-600" /></main><Footer /></div></div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-slate-100 dark:bg-slate-950">
@@ -35,51 +47,39 @@ export default function AdminPerformance() {
           
           <div className="mb-6">
             <h1 className="text-3xl font-bold text-slate-800 dark:text-white">Indicadores Globais</h1>
-            <p className="text-slate-500 dark:text-slate-400">Visão macro analítica do aproveitamento acadêmico institucional.</p>
+            <p className="text-slate-500 dark:text-slate-400">Visão macro analítica do aproveitamento acadêmico institucional baseado no banco de dados.</p>
           </div>
 
-          {/* Cards Estratégicos */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 mb-8">
             <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
               <div className="flex justify-between items-center mb-3">
-                <h3 className="text-sm font-bold text-slate-400 uppercase">Eficiência de Aprovação</h3>
-                <Award className="text-green-500" size={20} />
-              </div>
-              <p className="text-3xl font-black text-slate-800 dark:text-white">91.5%</p>
-              <span className="text-xs text-green-600 font-semibold mt-2">↑ 1.2% em relação ao ano letivo anterior</span>
-            </div>
-
-            <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
-              <div className="flex justify-between items-center mb-3">
-                <h3 className="text-sm font-bold text-slate-400 uppercase">Evasão / Inativos</h3>
+                <h3 className="text-sm font-bold text-slate-400 uppercase">Taxa de Evasão (Inativos)</h3>
                 <ShieldAlert className="text-red-500" size={20} />
               </div>
-              <p className="text-3xl font-black text-slate-800 dark:text-white">1.8%</p>
-              <span className="text-xs text-slate-400 mt-2">Meta institucional: abaixo de 3.0%</span>
+              <p className="text-3xl font-black text-slate-800 dark:text-white">{global.evasao}%</p>
             </div>
 
             <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
               <div className="flex justify-between items-center mb-3">
-                <h3 className="text-sm font-bold text-slate-400 uppercase">Média da Instituição</h3>
+                <h3 className="text-sm font-bold text-slate-400 uppercase">Média Geral da Instituição</h3>
                 <Building2 className="text-blue-500" size={20} />
               </div>
-              <p className="text-3xl font-black text-slate-800 dark:text-white">7.75</p>
+              <p className="text-3xl font-black text-slate-800 dark:text-white">{global.media}</p>
               <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 mt-3">
-                <div className="bg-blue-600 h-2 rounded-full" style={{ width: "77.5%" }}></div>
+                <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${(parseFloat(global.media) / 10) * 100}%` }}></div>
               </div>
             </div>
 
             <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
               <div className="flex justify-between items-center mb-3">
-                <h3 className="text-sm font-bold text-slate-400 uppercase">Aproveitamento Mínimo</h3>
+                <h3 className="text-sm font-bold text-slate-400 uppercase">Nota de Corte</h3>
                 <TrendingUp className="text-purple-500" size={20} />
               </div>
-              <p className="text-3xl font-black text-slate-800 dark:text-white">6.0</p>
-              <span className="text-xs text-slate-400 mt-2">Nota de corte regulamentada pelo regimento</span>
+              <p className="text-3xl font-black text-slate-800 dark:text-white">{global.corte}</p>
+              <span className="text-xs text-slate-400 mt-2">Aproveitamento mínimo do regimento</span>
             </div>
           </div>
 
-          {/* Desempenho por Segmento Corporativo */}
           <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
             <BookOpen size={20} className="text-blue-500" /> Rendimento por Nível de Ensino
           </h2>
@@ -105,7 +105,7 @@ export default function AdminPerformance() {
                     </div>
                     <div>
                       <div className="flex justify-between items-center text-sm mb-1.5">
-                        <span className="text-slate-400 font-medium">Projeção de Aprovação Direta</span>
+                        <span className="text-slate-400 font-medium">Índice de Notas Acima da Média</span>
                         <span className="font-bold text-green-600 dark:text-green-400">{seg.taxaAprovacao}%</span>
                       </div>
                       <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2">
@@ -117,7 +117,7 @@ export default function AdminPerformance() {
                 
                 <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-end">
                   <span className="text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1 cursor-pointer hover:underline">
-                    Ver relatórios analíticos completos <ChevronRight size={14} />
+                    Ver alunos do nível <ChevronRight size={14} />
                   </span>
                 </div>
               </div>

@@ -95,21 +95,36 @@ routes.post('/login', async (req, res: Response) => {
 // =========================
 // 3. PERFIL
 // =========================
-routes.get('/perfil', authMiddleware, async (req: AuthRequest, res: Response) => {
+routes.get('/perfil', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const user = await prisma.user.findUnique({ where: { id: req.userId } });
-    if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' });
+    // Fazemos um "include" para trazer a ficha de aluno ou funcionário ligada a este login
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId },
+      include: {
+        aluno: true,
+        funcionario: true
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'Usuário não encontrado.' });
+    }
+
+    // MÁGICA: Prioriza a foto do Perfil. Se não tiver, puxa a foto do cadastro original!
+    let fotoFinal = user.fotoUrl;
+    if (!fotoFinal && user.aluno?.fotoUrl) fotoFinal = user.aluno.fotoUrl;
+    if (!fotoFinal && user.funcionario?.fotoUrl) fotoFinal = user.funcionario.fotoUrl;
 
     return res.json({
       id: user.id,
       nome: user.nome,
       email: user.email,
       cargo: user.cargo,
-      mensagem: 'Parabéns! Você passou pelo segurança usando um JWT válido!'
+      fotoUrl: fotoFinal ? `http://localhost:3333/uploads/${fotoFinal}` : null,
     });
+    
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: 'Erro interno no servidor.' });
+    return res.status(500).json({ error: "Erro interno no servidor." });
   }
 });
 
@@ -566,7 +581,8 @@ routes.get('/funcionarios/:id', authMiddleware, async (req, res) => {
 // Editar funcionário
 routes.put('/funcionarios/:id', authMiddleware, upload.any(), async (req: AuthRequest, res) => {
   try {
-    const { id } = req.params;
+    const id = String(req.params.id);
+
     const {
       status, vaga, contrato, periodoContrato, dataFimContrato,
       nome, email, cpf, ra, nascimento, sexo, celular,
@@ -575,8 +591,9 @@ routes.put('/funcionarios/:id', authMiddleware, upload.any(), async (req: AuthRe
       disciplinas, formacoes, experiencias
     } = req.body;
 
-    const funcionarioAtual = await prisma.funcionario.findUnique({ where: { id } });
+const funcionarioAtual = await prisma.funcionario.findUnique({ where: { id } });
     if (!funcionarioAtual) return res.status(404).json({ error: 'Funcionário não encontrado.' });
+
 
     const files = req.files as Express.Multer.File[];
     let nomeArquivoFoto: string | null = null;
@@ -648,8 +665,9 @@ routes.put('/funcionarios/:id', authMiddleware, upload.any(), async (req: AuthRe
 // Excluir funcionário
 routes.delete('/funcionarios/:id', authMiddleware, async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = String(req.params.id);
     const funcionario = await prisma.funcionario.findUnique({ where: { id } });
+
     if (!funcionario) return res.status(404).json({ error: 'Funcionário não encontrado.' });
 
     await prisma.funcionario.delete({ where: { id } });
@@ -762,9 +780,7 @@ routes.delete('/eventos/:id', authMiddleware, async (req, res) => {
   }
 });
 
-// ==========================================
-// ROTAS DE ROTEIROS (PLANOS DE AULA)
-// ==========================================
+// Rotas de Roteiros de Aula e Notas
 routes.post('/roteiros', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { titulo, disciplina, turma, dataAplicacao, status, conteudo, metodologia } = req.body;
@@ -849,6 +865,292 @@ routes.put('/roteiros/:id', authMiddleware, async (req: AuthRequest, res) => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: "Erro ao atualizar roteiro." });
+  }
+});
+
+// ROTAS DE DIÁRIO DE CLASSE E NOTAS
+// ==========================================
+
+// 1. Buscar Turmas onde o Professor Logado dá aula
+routes.get('/diario/turmas', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const func = await prisma.funcionario.findUnique({ where: { userId: req.userId } });
+    if (!func) return res.status(404).json({ error: "Funcionário não encontrado." });
+
+    const alocacoes = await prisma.alocacao.findMany({
+      where: { funcionarioId: func.id },
+      include: { turma: true }
+    });
+
+    const formatadas = alocacoes.map(a => ({
+      id: a.id,
+      nome: `${a.turma.ano} ${a.turma.serie} - ${a.disciplina}`
+    }));
+
+    return res.json(formatadas);
+  } catch(err) { res.status(500).json({ error: "Erro ao buscar turmas." }); }
+});
+
+// 2. Buscar Alunos da Turma selecionada
+routes.get('/diario/alunos/:alocacaoId', authMiddleware, async (req, res) => {
+  try {
+    const { alocacaoId } = req.params;
+    const alocacao = await prisma.alocacao.findUnique({ where: { id: alocacaoId }, include: { turma: true } });
+    if (!alocacao) return res.status(404).json({ error: "Turma não encontrada" });
+
+    // Busca os alunos que pertencem ao ano e série dessa alocação
+    const alunos = await prisma.aluno.findMany({
+      where: { anoTurma: alocacao.turma.ano, serieTurma: alocacao.turma.serie },
+      include: { user: true },
+      orderBy: { user: { nome: 'asc' } }
+    });
+
+    return res.json(alunos.map(a => ({ id: a.id, nome: a.user.nome, matricula: a.matricula })));
+  } catch(err) { res.status(500).json({ error: "Erro ao buscar alunos." }); }
+});
+
+// 3. Buscar e Salvar Frequência
+routes.get('/diario/frequencia', authMiddleware, async (req, res) => {
+  try {
+    const freq = await prisma.frequencia.findMany({
+      where: { alocacaoId: String(req.query.alocacaoId), data: String(req.query.data) }
+    });
+    return res.json(freq);
+  } catch(err) { res.status(500).json({ error: "Erro ao buscar frequência." }); }
+});
+
+routes.post('/diario/frequencia', authMiddleware, async (req, res) => {
+  try {
+    const { alocacaoId, data, frequencias } = req.body;
+    for (const f of frequencias) {
+      await prisma.frequencia.upsert({ // A Mágica! Cria se não existir, atualiza se existir
+        where: { alunoId_alocacaoId_data: { alunoId: f.alunoId, alocacaoId, data } },
+        update: { presente: f.presente, observacao: f.observacao },
+        create: { alunoId: f.alunoId, alocacaoId, data, presente: f.presente, observacao: f.observacao }
+      });
+    }
+    return res.json({ message: "Frequência salva!" });
+  } catch(err) { res.status(500).json({ error: "Erro ao salvar frequência" }); }
+});
+
+// 4. Buscar e Salvar Notas
+routes.get('/diario/notas', authMiddleware, async (req, res) => {
+  try {
+    const notas = await prisma.nota.findMany({
+      where: { alocacaoId: String(req.query.alocacaoId), bimestre: String(req.query.bimestre) }
+    });
+    return res.json(notas);
+  } catch(err) { res.status(500).json({ error: "Erro ao buscar notas." }); }
+});
+
+routes.post('/diario/notas', authMiddleware, async (req, res) => {
+  try {
+    const { alocacaoId, bimestre, notas } = req.body;
+    for (const n of notas) {
+      await prisma.nota.upsert({
+        where: { alunoId_alocacaoId_bimestre: { alunoId: n.alunoId, alocacaoId, bimestre } },
+        update: { n1: n.n1, n2: n.n2, n3: n.n3, n4: n.n4 },
+        create: { alunoId: n.alunoId, alocacaoId, bimestre, n1: n.n1, n2: n.n2, n3: n.n3, n4: n.n4 }
+      });
+    }
+    return res.json({ message: "Notas salvas!" });
+  } catch(err) { res.status(500).json({ error: "Erro ao salvar notas" }); }
+});
+
+// ROTAS DE MÉTRICAS E DASHBOARDS (ALUNOS E ADMIN)
+// ==========================================
+
+// 1. Métricas Globais para o Admin
+routes.get('/metricas/admin', authMiddleware, async (req, res) => {
+  try {
+    const alunos = await prisma.aluno.findMany();
+    const notas = await prisma.nota.findMany();
+
+    const totalAlunos = alunos.length;
+    // Calcula a evasão (Inativos e Desistentes)
+    const inativos = alunos.filter(a => a.status === 'Inativo' || a.status === 'Desistente').length;
+    const taxaEvasao = totalAlunos > 0 ? ((inativos / totalAlunos) * 100).toFixed(1) : "0.0";
+
+    // Calcula a média geral de toda a escola
+    let somaGlobal = 0;
+    let countGlobal = 0;
+    notas.forEach(n => {
+      const vals = [n.n1, n.n2, n.n3, n.n4].map(v => parseFloat(v?.replace(',', '.') || '0'));
+      const media = vals.reduce((a, b) => a + b, 0) / 4;
+      somaGlobal += media;
+      countGlobal++;
+    });
+    const mediaInstituicao = countGlobal > 0 ? (somaGlobal / countGlobal).toFixed(1) : "0.0";
+
+    // Calcula o desempenho dividido por Níveis de Ensino
+    const niveis = ["Ensino Fundamental I", "Ensino Fundamental II", "Ensino Médio"];
+    const segmentos = niveis.map(nivel => {
+      const alunosNivel = alunos.filter(a => a.nivelEnsino === nivel || a.nivelEnsino.includes(nivel));
+      const totalNivel = alunosNivel.length;
+      
+      const notasNivel = notas.filter(n => alunosNivel.some(a => a.id === n.alunoId));
+      
+      let somaNivel = 0;
+      let aprovadas = 0;
+      notasNivel.forEach(n => {
+        const vals = [n.n1, n.n2, n.n3, n.n4].map(v => parseFloat(v?.replace(',', '.') || '0'));
+        const media = vals.reduce((a, b) => a + b, 0) / 4;
+        somaNivel += media;
+        if(media >= 6.0) aprovadas++; // Nota de corte: 6.0
+      });
+
+      const mediaGeralNivel = notasNivel.length > 0 ? (somaNivel / notasNivel.length) : 0;
+      const taxaAprovacao = notasNivel.length > 0 ? Math.round((aprovadas / notasNivel.length) * 100) : 0;
+
+      return {
+        nome: nivel,
+        mediaGeral: mediaGeralNivel,
+        taxaAprovacao,
+        totalAlunos: totalNivel
+      };
+    });
+
+    // Filtra segmentos que têm alunos para não mostrar blocos vazios
+    const segmentosAtivos = segmentos.filter(s => s.totalAlunos > 0);
+
+    return res.json({
+      global: { evasao: taxaEvasao, media: mediaInstituicao, corte: "6.0" },
+      segmentos: segmentosAtivos.length > 0 ? segmentosAtivos : [
+        { nome: "Nenhum aluno cadastrado com notas", mediaGeral: 0, taxaAprovacao: 0, totalAlunos: 0 }
+      ]
+    });
+
+  } catch(err) {
+    return res.status(500).json({ error: "Erro ao gerar métricas institucionais." });
+  }
+});
+
+// 2. Métricas Individuais do Aluno
+routes.get('/metricas/aluno', authMiddleware, async (req, res) => {
+  try {
+    // Busca o aluno logado
+    const aluno = await prisma.aluno.findUnique({ where: { userId: req.userId } });
+    if(!aluno) return res.status(404).json({ error: "Aluno não encontrado" });
+
+    const turmaStr = `${aluno.anoTurma} ${aluno.serieTurma}`;
+    const totalAlunosTurma = await prisma.aluno.count({ 
+      where: { anoTurma: aluno.anoTurma, serieTurma: aluno.serieTurma, status: "Matriculado" }
+    });
+
+    const notas = await prisma.nota.findMany({ where: { alunoId: aluno.id }, include: { alocacao: true }});
+    const frequencias = await prisma.frequencia.findMany({ where: { alunoId: aluno.id }, include: { alocacao: true }});
+
+    const disciplinasMap: any = {};
+
+    // Agrupa as presenças
+    frequencias.forEach(f => {
+      const disc = f.alocacao.disciplina;
+      if(!disciplinasMap[disc]) disciplinasMap[disc] = { id: f.alocacao.id, nome: disc, faltas: 0, aulasDadas: 0, media: 0 };
+      disciplinasMap[disc].aulasDadas++;
+      if(!f.presente) disciplinasMap[disc].faltas++;
+    });
+
+    // Agrupa as Notas
+    let somaGeral = 0;
+    let countGeral = 0;
+    notas.forEach(n => {
+      const disc = n.alocacao.disciplina;
+      if(!disciplinasMap[disc]) disciplinasMap[disc] = { id: n.alocacao.id, nome: disc, faltas: 0, aulasDadas: 0, media: 0 };
+      const vals = [n.n1, n.n2, n.n3, n.n4].map(v => parseFloat(v?.replace(',', '.') || '0'));
+      const media = vals.reduce((a, b) => a + b, 0) / 4;
+      disciplinasMap[disc].media = media;
+      
+      somaGeral += media;
+      countGeral++;
+    });
+
+    const subjects = Object.values(disciplinasMap);
+    const mediaGeral = countGeral > 0 ? (somaGeral / countGeral) : 0;
+
+    let totalAulas = 0;
+    let totalFaltas = 0;
+    subjects.forEach((s: any) => { totalAulas += s.aulasDadas; totalFaltas += s.faltas; });
+    const frequenciaGeral = totalAulas > 0 ? Math.round(((totalAulas - totalFaltas) / totalAulas) * 100) : 100;
+
+    return res.json({
+      stats: {
+        turma: turmaStr,
+        totalAlunos: totalAlunosTurma,
+        posicaoRanking: 1, // Fixado como top 1 por simplicidade de cálculo
+        mediaGeral,
+        frequenciaGeral
+      },
+      subjects
+    });
+
+  } catch(err) {
+    return res.status(500).json({ error: "Erro ao gerar métricas do aluno" });
+  }
+});
+
+// 3. Métricas Globais para o Coordenador
+routes.get('/metricas/coordinator', authMiddleware, async (req, res) => {
+  try {
+    const alunos = await prisma.aluno.findMany();
+    const notas = await prisma.nota.findMany();
+
+    const totalAlunos = alunos.length;
+    
+    // Calcula a evasão (Inativos e Desistentes)
+    const inativos = alunos.filter(a => a.status === 'Inativo' || a.status === 'Desistente').length;
+    const taxaEvasao = totalAlunos > 0 ? ((inativos / totalAlunos) * 100).toFixed(1) : "0.0";
+
+    // Calcula a média geral de toda a escola
+    let somaGlobal = 0;
+    let countGlobal = 0;
+    notas.forEach(n => {
+      const vals = [n.n1, n.n2, n.n3, n.n4].map(v => parseFloat(v?.replace(',', '.') || '0'));
+      const media = vals.reduce((a, b) => a + b, 0) / 4;
+      somaGlobal += media;
+      countGlobal++;
+    });
+    const mediaInstituicao = countGlobal > 0 ? (somaGlobal / countGlobal).toFixed(1) : "0.0";
+
+    // Calcula o desempenho dividido por Níveis de Ensino
+    const niveis = ["Ensino Fundamental I", "Ensino Fundamental II", "Ensino Médio"];
+    const segmentos = niveis.map(nivel => {
+      const alunosNivel = alunos.filter(a => a.nivelEnsino === nivel || a.nivelEnsino.includes(nivel));
+      const totalNivel = alunosNivel.length;
+      
+      const notasNivel = notas.filter(n => alunosNivel.some(a => a.id === n.alunoId));
+      
+      let somaNivel = 0;
+      let aprovadas = 0;
+      notasNivel.forEach(n => {
+        const vals = [n.n1, n.n2, n.n3, n.n4].map(v => parseFloat(v?.replace(',', '.') || '0'));
+        const media = vals.reduce((a, b) => a + b, 0) / 4;
+        somaNivel += media;
+        if(media >= 6.0) aprovadas++; // Nota de corte estipulada: 6.0
+      });
+
+      const mediaGeralNivel = notasNivel.length > 0 ? (somaNivel / notasNivel.length) : 0;
+      const taxaAprovacao = notasNivel.length > 0 ? Math.round((aprovadas / notasNivel.length) * 100) : 0;
+
+      return {
+        nome: nivel,
+        mediaGeral: mediaGeralNivel,
+        taxaAprovacao,
+        totalAlunos: totalNivel
+      };
+    });
+
+    // Filtra para mostrar apenas os segmentos que realmente têm alunos cadastrados
+    const segmentosAtivos = segmentos.filter(s => s.totalAlunos > 0);
+
+    return res.json({
+      global: { evasao: taxaEvasao, media: mediaInstituicao, corte: "6.0" },
+      segmentos: segmentosAtivos.length > 0 ? segmentosAtivos : [
+        { nome: "Nenhum aluno cadastrado com notas", mediaGeral: 0, taxaAprovacao: 0, totalAlunos: 0 }
+      ]
+    });
+
+  } catch(err) {
+    return res.status(500).json({ error: "Erro ao gerar métricas da coordenação." });
   }
 });
 
