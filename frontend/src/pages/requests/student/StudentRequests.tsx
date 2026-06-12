@@ -1,59 +1,24 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import type { ReactNode } from "react";
-import { 
-  Plus, 
-  Search, 
-  Clock, 
-  CheckCircle2, 
-  XCircle, 
-  FileText, 
-  Paperclip,
-  Eye,
-  X,
-  AlertCircle
-} from "lucide-react";
+import { Plus, Search, Clock, CheckCircle2, XCircle, Paperclip, Eye, X, AlertCircle, Loader2, FileText } from "lucide-react";
 import Sidebar from "../../../components/layout/Sidebar";
 import Header from "../../../components/layout/Header";
 import Footer from "../../../components/layout/Footer";
+import { api } from "../../../services/api";
 
 type StatusRequisicao = "Pendente" | "Em Análise" | "Concluído" | "Negado";
 
 interface RequisicaoAluno {
-  id: string;
+  id: string; // Protocolo (REQ-...)
+  realId?: string; // ID do banco
   tipo: string;
   dataSolicitacao: string;
   status: StatusRequisicao;
   descricao: string;
   respostaSecretaria?: string;
   arquivoAnexo?: string;
+  arquivoSecretaria?: string; // Novo campo para o arquivo gerado pela secretaria
 }
-
-const MOCK_REQUISICOES: RequisicaoAluno[] = [
-  {
-    id: "REQ-2026-001",
-    tipo: "Declaração de Vínculo Escolar",
-    dataSolicitacao: "2026-05-10",
-    status: "Concluído",
-    descricao: "Necessito da declaração para renovação do passe livre estudantil.",
-    respostaSecretaria: "Declaração emitida e assinada digitalmente. O documento encontra-se em anexo.",
-    arquivoAnexo: "declaracao_vinculo_assinada.pdf"
-  },
-  {
-    id: "REQ-2026-042",
-    tipo: "Justificativa de Falta",
-    dataSolicitacao: "2026-05-18",
-    status: "Em Análise",
-    descricao: "Faltei no dia 17/05 por motivos de saúde. Atestado médico em anexo.",
-    arquivoAnexo: "atestado_medico.jpg"
-  },
-  {
-    id: "REQ-2026-088",
-    tipo: "Histórico Escolar Parcial",
-    dataSolicitacao: "2026-05-21",
-    status: "Pendente",
-    descricao: "Solicito o histórico parcial para inscrição em curso de idiomas.",
-  }
-];
 
 const statusStylesMap: Record<StatusRequisicao, { bg: string; text: string; icon: ReactNode }> = {
   "Concluído": { bg: "bg-green-100 dark:bg-green-900/30", text: "text-green-700 dark:text-green-400", icon: <CheckCircle2 size={16} className="text-green-600 dark:text-green-400" /> },
@@ -63,14 +28,34 @@ const statusStylesMap: Record<StatusRequisicao, { bg: string; text: string; icon
 };
 
 export default function StudentRequests() {
-  const [requisicoes, setRequisicoes] = useState<RequisicaoAluno[]>(MOCK_REQUISICOES);
+  const [requisicoes, setRequisicoes] = useState<RequisicaoAluno[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [selectedReq, setSelectedReq] = useState<RequisicaoAluno | null>(null);
+  
+  const [loading, setLoading] = useState(true);
+  const [enviando, setEnviando] = useState(false);
 
   // Form states
   const [formTipo, setFormTipo] = useState("");
   const [formDescricao, setFormDescricao] = useState("");
+  const [formArquivo, setFormArquivo] = useState<File | null>(null);
+
+  // Carregar dados da API
+  const carregarRequisicoes = async () => {
+    try {
+      const response = await api.get('/requisicoes');
+      setRequisicoes(response.data);
+    } catch (error) {
+      console.error("Erro ao carregar requisições", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    carregarRequisicoes();
+  }, []);
 
   const filteredRequisicoes = useMemo(() => {
     const term = searchTerm.toLowerCase().trim();
@@ -78,28 +63,41 @@ export default function StudentRequests() {
     return requisicoes.filter(r => r.tipo.toLowerCase().includes(term) || r.id.toLowerCase().includes(term));
   }, [requisicoes, searchTerm]);
 
-  const handleCreateRequest = (e: React.FormEvent) => {
+  const handleCreateRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formTipo || !formDescricao) return;
 
-    const novo: RequisicaoAluno = {
-      id: `REQ-2026-${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`,
-      tipo: formTipo,
-      descricao: formDescricao,
-      dataSolicitacao: new Date().toISOString().split("T")[0],
-      status: "Pendente"
-    };
+    setEnviando(true);
+    try {
+      const formData = new FormData();
+      formData.append("tipo", formTipo);
+      formData.append("descricao", formDescricao);
+      if (formArquivo) formData.append("anexo", formArquivo);
 
-    setRequisicoes([novo, ...requisicoes]);
-    setIsNewModalOpen(false);
-    setFormTipo("");
-    setFormDescricao("");
+      await api.post('/requisicoes', formData, { headers: { "Content-Type": "multipart/form-data" } });
+      
+      await carregarRequisicoes(); // Recarrega a lista
+      setIsNewModalOpen(false);
+      setFormTipo("");
+      setFormDescricao("");
+      setFormArquivo(null);
+    } catch (error) {
+      alert("Erro ao enviar a requisição.");
+    } finally {
+      setEnviando(false);
+    }
   };
 
   const formatarData = (dataStr: string) => {
     const [ano, mes, dia] = dataStr.split("-");
     return `${dia}/${mes}/${ano}`;
   };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen bg-slate-100 dark:bg-slate-950"><Sidebar /><div className="flex-1 flex flex-col min-w-0"><Header /><main className="flex-1 flex items-center justify-center"><Loader2 className="animate-spin h-10 w-10 text-blue-600" /></main><Footer /></div></div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-slate-100 dark:bg-slate-950">
@@ -123,13 +121,7 @@ export default function StudentRequests() {
 
           <div className="mb-6 max-w-md relative">
             <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Buscar por protocolo ou tipo..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
-            />
+            <input type="text" placeholder="Buscar por protocolo ou tipo..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-3 rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
 
           <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
@@ -158,13 +150,16 @@ export default function StudentRequests() {
                           </span>
                         </td>
                         <td className="px-6 py-4 text-center">
-                          <button onClick={() => setSelectedReq(req)} className="action-btn bg-blue-600 hover:bg-blue-700 inline-flex items-center justify-center cursor-pointer" title="Ver Detalhes">
+                          <button onClick={() => setSelectedReq(req)} className="p-2 rounded-xl bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 hover:bg-blue-200 hover:text-blue-800 dark:hover:bg-blue-900/40 dark:hover:text-blue-500 transition-colors inline-flex items-center justify-center cursor-pointer" title="Ver Detalhes">
                             <Eye size={16} />
                           </button>
                         </td>
                       </tr>
                     );
                   })}
+                  {filteredRequisicoes.length === 0 && (
+                    <tr><td colSpan={5} className="text-center py-12 text-slate-500">Nenhuma requisição encontrada.</td></tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -186,7 +181,7 @@ export default function StudentRequests() {
                       <option value="Declaração de Vínculo Escolar">Declaração de Vínculo Escolar</option>
                       <option value="Histórico Escolar Parcial">Histórico Escolar Parcial</option>
                       <option value="Justificativa de Falta">Justificativa de Falta</option>
-                      <option value="2ª Via de Carteirinha">2ª Via de Carteirinha</option>
+                      <option value="Revisão de Nota">Revisão de Nota</option>
                     </select>
                   </div>
                   <div className="flex flex-col gap-2">
@@ -194,11 +189,14 @@ export default function StudentRequests() {
                     <textarea required rows={4} value={formDescricao} onChange={(e) => setFormDescricao(e.target.value)} placeholder="Detalhe sua solicitação..." className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
                   </div>
                   <div className="flex flex-col gap-2">
-                    <label className="text-sm font-bold text-slate-700 dark:text-slate-300">Anexo (Opcional, Ex: Atestado)</label>
-                    <input type="file" className="w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900/30 dark:file:text-blue-400 cursor-pointer" />
+                    <label className="text-sm font-bold text-slate-700 dark:text-slate-300">Anexo (Ex: Atestado Médico)</label>
+                    <input type="file" onChange={(e) => setFormArquivo(e.target.files?.[0] || null)} className="w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900/30 dark:file:text-blue-400 cursor-pointer" />
                   </div>
                   <div className="pt-4 flex justify-end">
-                    <button type="submit" className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-md">Enviar Pedido</button>
+                    <button type="submit" disabled={enviando} className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-md flex items-center gap-2 disabled:opacity-50">
+                      {enviando && <Loader2 size={18} className="animate-spin" />}
+                      {enviando ? "Enviando..." : "Enviar Pedido"}
+                    </button>
                   </div>
                 </form>
               </div>
@@ -233,15 +231,26 @@ export default function StudentRequests() {
                     </div>
                   )}
 
-                  {selectedReq.arquivoAnexo && (
-                    <div className="flex items-center justify-between p-3 border border-slate-200 dark:border-slate-700 rounded-xl">
+                  {/* ADICIONE ESTE BLOCO AQUI */}
+                  {selectedReq.arquivoSecretaria && (
+                    <div className="flex items-center justify-between p-3 border border-emerald-200 dark:border-emerald-800 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 mt-3">
                       <div className="flex items-center gap-3">
-                        <div className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-500">
-                          <Paperclip size={18} />
+                        <div className="p-2 bg-emerald-100 dark:bg-emerald-800 rounded-lg text-emerald-600 dark:text-emerald-400">
+                          <FileText size={18} />
                         </div>
-                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate max-w-[200px]">{selectedReq.arquivoAnexo}</span>
+                        <span className="text-sm font-medium text-emerald-800 dark:text-emerald-300">Documento Oficial Emitido</span>
                       </div>
-                      <button className="text-sm font-bold text-blue-600 dark:text-blue-400 hover:underline">Baixar</button>
+                      <a href={selectedReq.arquivoSecretaria} target="_blank" rel="noreferrer" className="text-sm font-bold text-emerald-600 dark:text-emerald-400 hover:underline">Visualizar / Baixar</a>
+                    </div>
+                  )}
+
+                  {selectedReq.arquivoAnexo && (
+                    <div className="flex items-center justify-between p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-500"><Paperclip size={18} /></div>
+                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate max-w-[200px]">Documento Anexado</span>
+                      </div>
+                      <a href={selectedReq.arquivoAnexo} target="_blank" rel="noreferrer" className="text-sm font-bold text-blue-600 dark:text-blue-400 hover:underline">Ver / Baixar</a>
                     </div>
                   )}
                 </div>

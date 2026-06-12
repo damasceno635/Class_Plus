@@ -93,7 +93,7 @@ export default function Sidebar() {
       label: "Requisições",
       icon: <ClipboardList size={20} />,
       path: "/requisicoes",
-      roles: ["admin", "secretary", "coordinator", "teacher", "student"],
+      roles: ["admin", "secretary", "student"],
     },
     {
       label: "Financeiro",

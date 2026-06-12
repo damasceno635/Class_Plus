@@ -1154,4 +1154,93 @@ routes.get('/metricas/coordinator', authMiddleware, async (req, res) => {
   }
 });
 
+// ROTAS DE REQUISIÇÕES (ALUNOS E SECRETARIA)
+// 1. Criar uma nova requisição (Aluno)
+routes.post('/requisicoes', authMiddleware, upload.single('anexo'), async (req: AuthRequest, res) => {
+  try {
+    const { tipo, descricao } = req.body;
+    const arquivoAnexo = req.file ? req.file.filename : null;
+
+    // Acha a ficha de aluno atrelada ao usuário logado
+    const aluno = await prisma.aluno.findUnique({ where: { userId: req.userId } });
+    if (!aluno) return res.status(403).json({ error: "Apenas alunos podem fazer requisições." });
+
+    // Gera um protocolo único (Ex: REQ-2026-4092)
+    const protocolo = `REQ-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const novaReq = await prisma.requisicao.create({
+      data: { protocolo, tipo, descricao, arquivoAnexo, alunoId: aluno.id }
+    });
+
+    return res.status(201).json(novaReq);
+  } catch (error) {
+    return res.status(500).json({ error: "Erro ao criar requisição." });
+  }
+});
+
+// 2. Buscar requisições
+routes.get('/requisicoes', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.userId }, include: { aluno: true } });
+    let requisicoes = [];
+
+    if (user?.cargo === 'student' && user.aluno) {
+      // Aluno vê só as dele
+      requisicoes = await prisma.requisicao.findMany({
+        where: { alunoId: user.aluno.id },
+        orderBy: { criadoEm: 'desc' }
+      });
+    } else if (user?.cargo === 'secretary' || user?.cargo === 'admin') {
+      // Secretaria e Admin veem todas (trazendo o nome do aluno junto)
+      requisicoes = await prisma.requisicao.findMany({
+        include: { aluno: { include: { user: true } } },
+        orderBy: { criadoEm: 'desc' }
+      });
+    }
+
+    const formatadas = requisicoes.map(r => ({
+      id: r.protocolo,
+      realId: r.id, // Guarda o ID verdadeiro do banco para atualizações
+      tipo: r.tipo,
+      dataSolicitacao: r.criadoEm.toISOString().split("T")[0],
+      status: r.status,
+      descricao: r.descricao,
+      respostaSecretaria: r.respostaSecretaria,
+      arquivoAnexo: r.arquivoAnexo ? `http://localhost:3333/uploads/${r.arquivoAnexo}` : null,
+      arquivoSecretaria: r.arquivoSecretaria ? `http://localhost:3333/uploads/${r.arquivoSecretaria}` : null,
+      nomeAluno: (r as any).aluno?.user?.nome || null,
+      matricula: (r as any).aluno?.matricula || "N/A"
+    }));
+
+    return res.json(formatadas);
+  } catch (error) {
+    return res.status(500).json({ error: "Erro ao buscar requisições." });
+  }
+});
+
+// 3. Atualizar Requisição (Para a Secretaria usar depois)
+routes.put('/requisicoes/:realId', authMiddleware, upload.single('documento'), async (req: AuthRequest, res) => {
+  try {
+    const { realId } = req.params;
+    const { status, respostaSecretaria } = req.body;
+    
+    // Pega o ficheiro que a secretária fez upload (se existir)
+    const arquivo = req.file ? req.file.filename : undefined;
+    
+    const dadosAtualizacao: any = {};
+    if (status) dadosAtualizacao.status = status;
+    if (respostaSecretaria) dadosAtualizacao.respostaSecretaria = respostaSecretaria;
+    if (arquivo) dadosAtualizacao.arquivoSecretaria = arquivo;
+
+    const atualizada = await prisma.requisicao.update({
+      where: { id: realId },
+      data: dadosAtualizacao
+    });
+    
+    return res.json(atualizada);
+  } catch (error) {
+    return res.status(500).json({ error: "Erro ao responder requisição." });
+  }
+});
+
 export default routes;

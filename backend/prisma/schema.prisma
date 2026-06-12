@@ -67,6 +67,7 @@ model Aluno {
   alergias      Alergia[]
   frequencias   Frequencia[]
   notas         Nota[]
+  requisicoes   Requisicao[]
 
   @@map("alunos")
 }
@@ -283,4 +284,23 @@ model Nota {
   // Garante que um aluno só tem um boletim por bimestre naquela disciplina
   @@unique([alunoId, alocacaoId, bimestre])
   @@map("notas")
+}
+
+// MÓDULO DE REQUISIÇÕES (SECRETARIA)
+model Requisicao {
+  id                 String   @id @default(uuid())
+  protocolo          String   @unique
+  tipo               String
+  descricao          String
+  status             String   @default("Pendente") 
+  respostaSecretaria String?
+  arquivoAnexo       String?  // O que o aluno enviou
+  
+  arquivoSecretaria  String?  // <-- ADICIONE ISTO: O que a secretaria devolveu!
+
+  alunoId            String
+  aluno              Aluno    @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+  criadoEm           DateTime @default(now())
+
+  @@map("requisicoes")
 }
