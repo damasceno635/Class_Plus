@@ -505,7 +505,7 @@ routes.get('/funcionarios', authMiddleware, async (req, res) => {
 // Buscar funcionário por ID (completo)
 routes.get('/funcionarios/:id', authMiddleware, async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = String(req.params.id);
     const funcionario = await prisma.funcionario.findUnique({
       where: { id },
       include: {
@@ -550,19 +550,19 @@ routes.get('/funcionarios/:id', authMiddleware, async (req, res) => {
         salario: funcionario.salario,
         pagamento: funcionario.pagamento
       },
-      disciplinas: funcionario.alocacoes.map((a: any) => ({
+      disciplinas: funcionario.alocacoes.map((a) => ({
         nome: a.disciplina,
         carga: a.cargaHoraria,
         turma: `${a.turma.ano} ${a.turma.serie}`,
         periodo: a.turma.periodo
       })),
-      formacoes: funcionario.formacoes.map((f: any) => ({
+      formacoes: funcionario.formacoes.map((f) => ({
         instituicao: f.instituicao,
         cnpj: f.cnpj,
         modalidade: f.modalidade,
         periodo: `${f.periodoInicio} até ${f.periodoFinal}`
       })),
-      experiencias: funcionario.experiencias.map((e: any) => ({
+      experiencias: funcionario.experiencias.map((e) => ({
         empresa: e.empresa,
         cnpj: e.cnpj,
         modalidade: e.modalidade,
@@ -756,7 +756,7 @@ routes.get('/eventos', authMiddleware, async (req, res) => {
 
 routes.put('/eventos/:id', authMiddleware, async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = String(req.params.id);
     const { titulo, descricao, data, tipo, horarioInicio, horarioFim } = req.body;
     const eventoAtualizado = await prisma.evento.update({
       where: { id },
@@ -771,7 +771,7 @@ routes.put('/eventos/:id', authMiddleware, async (req, res) => {
 
 routes.delete('/eventos/:id', authMiddleware, async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = String(req.params.id);
     await prisma.evento.delete({ where: { id } });
     return res.json({ mensagem: "Evento excluído com sucesso!" });
   } catch (error) {
@@ -800,7 +800,9 @@ routes.post('/roteiros', authMiddleware, async (req: AuthRequest, res) => {
 routes.get('/roteiros', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const user = await prisma.user.findUnique({ where: { id: req.userId } });
-    let roteiros = [];
+    let roteiros: Prisma.RoteiroGetPayload<{
+  include: { user: true };
+}>[] = [];
 
     if (user?.cargo === 'teacher') {
       roteiros = await prisma.roteiro.findMany({
@@ -844,7 +846,7 @@ routes.get('/roteiros', authMiddleware, async (req: AuthRequest, res) => {
 
 routes.put('/roteiros/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const { id } = req.params;
+    const id = String(req.params.id);
     const { titulo, disciplina, turma, dataAplicacao, status, conteudo, metodologia, feedbackCoordenador } = req.body;
 
     const data: any = {};
@@ -894,7 +896,7 @@ routes.get('/diario/turmas', authMiddleware, async (req: AuthRequest, res) => {
 // 2. Buscar Alunos da Turma selecionada
 routes.get('/diario/alunos/:alocacaoId', authMiddleware, async (req, res) => {
   try {
-    const { alocacaoId } = req.params;
+    const alocacaoId = String(req.params.alocacaoId);
     const alocacao = await prisma.alocacao.findUnique({ where: { id: alocacaoId }, include: { turma: true } });
     if (!alocacao) return res.status(404).json({ error: "Turma não encontrada" });
 
@@ -1182,7 +1184,15 @@ routes.post('/requisicoes', authMiddleware, upload.single('anexo'), async (req: 
 routes.get('/requisicoes', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const user = await prisma.user.findUnique({ where: { id: req.userId }, include: { aluno: true } });
-    let requisicoes = [];
+    let requisicoes: Prisma.RequisicaoGetPayload<{
+  include: {
+    aluno: {
+      include: {
+        user: true;
+      };
+    };
+  };
+}>[] = [];
 
     if (user?.cargo === 'student' && user.aluno) {
       // Aluno vê só as dele
@@ -1221,7 +1231,7 @@ routes.get('/requisicoes', authMiddleware, async (req: AuthRequest, res) => {
 // 3. Atualizar Requisição (Para a Secretaria usar depois)
 routes.put('/requisicoes/:realId', authMiddleware, upload.single('documento'), async (req: AuthRequest, res) => {
   try {
-    const { realId } = req.params;
+    const realId = String(req.params.realId);
     const { status, respostaSecretaria } = req.body;
     
     // Pega o ficheiro que a secretária fez upload (se existir)
@@ -1240,6 +1250,164 @@ routes.put('/requisicoes/:realId', authMiddleware, upload.single('documento'), a
     return res.json(atualizada);
   } catch (error) {
     return res.status(500).json({ error: "Erro ao responder requisição." });
+  }
+});
+
+// ROTAS DO FINANCEIRO (ALUNOS)
+routes.get('/financeiro/aluno', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const aluno = await prisma.aluno.findUnique({ where: { userId: req.userId } });
+    if (!aluno) return res.status(403).json({ error: "Acesso restrito a alunos." });
+
+    // Busca todas as faturas ordenadas da mais recente para a mais antiga
+    const faturas = await prisma.fatura.findMany({
+      where: { alunoId: aluno.id },
+      orderBy: { vencimento: 'desc' }
+    });
+
+    // LÓGICA INTELIGENTE: Verifica se alguma fatura pendente já venceu hoje!
+    const hoje = new Date().toISOString().split("T")[0]; // "2026-06-12"
+    
+    const faturasAtualizadas = await Promise.all(faturas.map(async (f) => {
+      if (f.status === "Pendente" && f.vencimento < hoje) {
+        // Atualiza no banco de dados para Atrasado
+        const atualizada = await prisma.fatura.update({
+          where: { id: f.id },
+          data: { status: "Atrasado" }
+        });
+        return atualizada;
+      }
+      return f;
+    }));
+
+    return res.json(faturasAtualizadas);
+  } catch (error) {
+    return res.status(500).json({ error: "Erro ao buscar dados financeiros." });
+  }
+});
+
+// ROTA AUXILIAR (Para você criar faturas de teste no banco)
+routes.post('/financeiro/admin/gerar', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    // Exemplo de Body JSON: { "alunoId": "ID_DO_ALUNO_AQUI", "referencia": "Taxa de Material", "vencimento": "2026-06-20", "valor": 350.00 }
+    const { alunoId, referencia, vencimento, valor } = req.body;
+    const nova = await prisma.fatura.create({
+      data: { alunoId, referencia, vencimento, valor: parseFloat(valor) }
+    });
+    return res.status(201).json(nova);
+  } catch (err) {
+    return res.status(500).json({ error: "Erro ao gerar fatura." });
+  }
+});
+
+// ROTAS DO FINANCEIRO (ADMIN E SECRETARIA)
+// 1. Dashboard Financeiro do Admin
+routes.get('/financeiro/admin', authMiddleware, async (req, res) => {
+  try {
+    // Busca todas as faturas e faz a ligação com os alunos
+    const faturas = await prisma.fatura.findMany({ 
+      include: { aluno: { include: { user: true } } }, 
+      orderBy: { vencimento: 'desc' } 
+    });
+
+    // Cálculos Dinâmicos
+    const receita = faturas.filter(f => f.status === 'Pago').reduce((acc, f) => acc + f.valor, 0);
+    const atrasados = faturas.filter(f => f.status === 'Atrasado').length;
+    const pendentes = faturas.filter(f => f.status === 'Pendente').length;
+    
+    // Calcula a inadimplência baseada apenas nas faturas vencidas/ativas
+    const totalCobrancasAtivas = faturas.filter(f => f.status !== 'Pago').length;
+    const inadimplencia = totalCobrancasAtivas > 0 ? ((atrasados / totalCobrancasAtivas) * 100).toFixed(1) : "0.0";
+
+    const despesasPrevistas = 318500; // Fixo no exemplo (seria vindo de uma tabela de Despesas)
+    const saldoOperacional = receita - despesasPrevistas;
+
+    // Formata as últimas transações pagas
+    const ultimasTransacoes = faturas
+      .filter(f => f.status === 'Pago')
+      .slice(0, 5) // Pega apenas as 5 últimas
+      .map(f => ({
+        id: f.id,
+        data: f.vencimento,
+        descricao: `${f.referencia} - ${f.aluno.user.nome}`,
+        categoria: "Receita Acadêmica",
+        valor: f.valor
+      }));
+
+    return res.json({
+      receitaTotal: receita,
+      despesasPrevistas,
+      inadimplencia: parseFloat(inadimplencia),
+      saldoOperacional,
+      ultimasTransacoes
+    });
+  } catch (error) {
+    return res.status(500).json({ error: "Erro ao buscar métricas financeiras." });
+  }
+});
+
+// 2. Lista da Secretaria
+routes.get('/financeiro/secretaria', authMiddleware, async (req, res) => {
+  try {
+    const hoje = new Date().toISOString().split("T")[0];
+
+    // Atualiza faturas atrasadas de todos os alunos antes de listar (Inteligência de Vencimento)
+    await prisma.fatura.updateMany({
+      where: { status: 'Pendente', vencimento: { lt: hoje } },
+      data: { status: 'Atrasado' }
+    });
+
+    // Puxa os alunos com a sua fatura mais recente
+    const alunos = await prisma.aluno.findMany({ 
+      include: { 
+        user: true, 
+        faturas: { orderBy: { vencimento: 'desc' }, take: 1 } // Pega só a fatura mais recente
+      } 
+    });
+
+    const dados = alunos.map(aluno => {
+      const ultimaFatura = aluno.faturas[0];
+      let diasAtraso = 0;
+
+      if (ultimaFatura && ultimaFatura.status === 'Atrasado') {
+        const dataHoje = new Date();
+        const dataVenc = new Date(ultimaFatura.vencimento);
+        const diffTime = Math.abs(dataHoje.getTime() - dataVenc.getTime());
+        diasAtraso = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      }
+
+      return {
+        alunoId: aluno.id,
+        nome: aluno.user.nome,
+        matricula: aluno.matricula,
+        turma: `${aluno.anoTurma} ${aluno.serieTurma}`,
+        statusMensalidade: ultimaFatura ? ultimaFatura.status : "Em Dia",
+        ultimaPaga: ultimaFatura ? ultimaFatura.referencia : "-",
+        diasAtraso,
+        // Dados escondidos mas necessários para a geração do PDF e baixa
+        faturaId: ultimaFatura ? ultimaFatura.id : null,
+        valor: ultimaFatura ? ultimaFatura.valor : 0,
+        vencimento: ultimaFatura ? ultimaFatura.vencimento : ""
+      };
+    });
+
+    return res.json(dados);
+  } catch (error) {
+    return res.status(500).json({ error: "Erro ao listar dados da secretaria." });
+  }
+});
+
+// 3. Dar Baixa Manual na Fatura
+routes.put('/financeiro/baixa/:faturaId', authMiddleware, async (req, res) => {
+  try {
+    const faturaId = String(req.params.faturaId);
+    const atualizada = await prisma.fatura.update({
+      where: { id: faturaId },
+      data: { status: 'Pago' }
+    });
+    return res.json(atualizada);
+  } catch (error) {
+    return res.status(500).json({ error: "Erro ao registrar pagamento." });
   }
 });
 

@@ -1,23 +1,120 @@
-import { useState } from "react";
-import { Search, FileText, Send, CheckCircle2, AlertCircle, Clock, DollarSign } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Search, FileText, Send, CheckCircle2, AlertCircle, Clock, DollarSign, Loader2 } from "lucide-react";
 import Sidebar from "../../../components/layout/Sidebar";
 import Header from "../../../components/layout/Header";
 import Footer from "../../../components/layout/Footer";
+import { api } from "../../../services/api";
 
-const MOCK_ALUNOS_FINANCEIRO = [
-  { id: "202601", nome: "Ana Beatriz Souza", turma: "8º Ano A", statusMensalidade: "Em Dia", ultimaPaga: "Maio/2026" },
-  { id: "202602", nome: "Carlos Eduardo Mendes", turma: "8º Ano A", statusMensalidade: "Atrasado", ultimaPaga: "Março/2026", diasAtraso: 25 },
-  { id: "202603", nome: "Fernanda Costa Silva", turma: "9º Ano B", statusMensalidade: "Pendente", ultimaPaga: "Abril/2026", diasAtraso: 0 },
-];
+// @ts-ignore
+import html2pdf from "html2pdf.js";
+
+interface AlunoFinanceiro {
+  alunoId: string;
+  nome: string;
+  matricula: string;
+  turma: string;
+  statusMensalidade: "Pago" | "Pendente" | "Atrasado" | "Em Dia";
+  ultimaPaga: string;
+  diasAtraso: number;
+  faturaId: string | null;
+  valor: number;
+  vencimento: string;
+}
 
 export default function SecretaryFinance() {
+  const [alunos, setAlunos] = useState<AlunoFinanceiro[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [processandoId, setProcessandoId] = useState<string | null>(null);
 
-  const filtered = MOCK_ALUNOS_FINANCEIRO.filter(a => a.nome.toLowerCase().includes(searchTerm.toLowerCase()) || a.id.includes(searchTerm));
-
-  const darBaixaManual = (nome: string) => {
-    alert(`Pagamento registrado no caixa para o aluno(a) ${nome}.`);
+  const carregarDados = async () => {
+    try {
+      const response = await api.get('/financeiro/secretaria');
+      setAlunos(response.data);
+    } catch (error) {
+      console.error("Erro ao carregar alunos", error);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  useEffect(() => {
+    carregarDados();
+  }, []);
+
+  const filtered = alunos.filter(a => a.nome.toLowerCase().includes(searchTerm.toLowerCase()) || a.matricula.includes(searchTerm));
+
+  const formatarMoeda = (valor: number) => valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const formatarData = (dataStr: string) => dataStr.split("-").reverse().join("/");
+
+  // 1. DAR BAIXA MANUAL (PAGAMENTO NO BALCÃO)
+  const darBaixaManual = async (aluno: AlunoFinanceiro) => {
+    if (!aluno.faturaId || aluno.statusMensalidade === "Pago") return;
+    
+    if (confirm(`Confirmar o recebimento manual do valor de ${formatarMoeda(aluno.valor)} para o aluno(a) ${aluno.nome}?`)) {
+      setProcessandoId(aluno.alunoId);
+      try {
+        await api.put(`/financeiro/baixa/${aluno.faturaId}`);
+        alert("Pagamento registrado com sucesso no sistema!");
+        await carregarDados(); // Recarrega a lista para atualizar os status
+      } catch (error) {
+        alert("Erro ao registrar pagamento.");
+      } finally {
+        setProcessandoId(null);
+      }
+    }
+  };
+
+  // 2. GERAR 2ª VIA DO BOLETO (Igual ao do Aluno)
+  const gerarSegundaVia = async (aluno: AlunoFinanceiro) => {
+    if (!aluno.faturaId) return;
+    setProcessandoId(aluno.alunoId);
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; padding: 40px; color: #1e293b; max-width: 800px; margin: 0 auto;">
+        <div style="border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 30px;">
+          <h1 style="margin: 0; font-size: 24px; color: #0f172a;">2ª Via - Boleto / PIX de Cobrança</h1>
+          <p style="margin: 5px 0 0 0; color: #64748b;">Class Plus - Instituição de Ensino</p>
+        </div>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
+          <tr><td style="padding: 12px; border: 1px solid #e2e8f0;"><strong>Pagador:</strong> ${aluno.nome}</td></tr>
+          <tr><td style="padding: 12px; border: 1px solid #e2e8f0;"><strong>Matrícula:</strong> ${aluno.matricula}</td></tr>
+          <tr><td style="padding: 12px; border: 1px solid #e2e8f0;"><strong>Referência:</strong> ${aluno.ultimaPaga}</td></tr>
+          <tr><td style="padding: 12px; border: 1px solid #e2e8f0;"><strong>Vencimento Original:</strong> ${formatarData(aluno.vencimento)}</td></tr>
+          <tr><td style="padding: 12px; border: 1px solid #e2e8f0; font-size: 18px;"><strong>Valor a Pagar:</strong> ${formatarMoeda(aluno.valor)}</td></tr>
+        </table>
+        <div style="text-align: center; padding: 20px; border: 2px dashed #cbd5e1; border-radius: 10px; background: #f8fafc;">
+          <p style="margin-bottom: 10px; font-weight: bold; color: #0f172a;">Chave PIX Copia e Cola</p>
+          <p style="font-family: monospace; word-break: break-all; font-size: 12px; color: #475569; background: #e2e8f0; padding: 10px; border-radius: 5px;">00020126580014br.gov.bcb.pix0136pix@classplus.com.br5204000053039865802BR5903BRL6005${aluno.valor.toFixed(2)}6206Caxias6304123454041234</p>
+        </div>
+      </div>
+    `;
+
+    const container = document.createElement('div');
+    container.innerHTML = htmlContent;
+
+    const opcoes = {
+      margin: 15,
+      filename: `Boleto_2Via_${aluno.ultimaPaga.replace(/[^a-zA-Z0-9]/g, "_")}_${aluno.matricula}.pdf`,
+      image: { type: "jpeg" as const, quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" as const }
+    };
+
+    try {
+      await html2pdf().set(opcoes).from(container).save();
+    } catch (err) {
+      alert("Erro ao gerar o PDF.");
+    } finally {
+      setProcessandoId(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen bg-slate-100 dark:bg-slate-950"><Sidebar /><div className="flex-1 flex flex-col min-w-0"><Header /><main className="flex-1 flex items-center justify-center"><Loader2 className="animate-spin h-10 w-10 text-blue-600" /></main><Footer /></div></div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-slate-100 dark:bg-slate-950">
@@ -28,7 +125,7 @@ export default function SecretaryFinance() {
           
           <div className="mb-6">
             <h1 className="text-3xl font-bold text-slate-800 dark:text-white">Controle de Mensalidades</h1>
-            <p className="text-slate-500 dark:text-slate-400">Atendimento financeiro, emissão de boletos e registro de pagamentos.</p>
+            <p className="text-slate-500 dark:text-slate-400">Atendimento financeiro, emissão de boletos e registro de pagamentos no balcão.</p>
           </div>
 
           <div className="mb-6 max-w-md relative">
@@ -43,34 +140,55 @@ export default function SecretaryFinance() {
                   <tr>
                     <th className="px-6 py-4 text-sm font-bold text-slate-700 dark:text-slate-300">Aluno</th>
                     <th className="px-6 py-4 text-sm font-bold text-slate-700 dark:text-slate-300">Turma</th>
-                    <th className="px-6 py-4 text-sm font-bold text-slate-700 dark:text-slate-300">Última Paga</th>
+                    <th className="px-6 py-4 text-sm font-bold text-slate-700 dark:text-slate-300">Última Fatura</th>
                     <th className="px-6 py-4 text-sm font-bold text-slate-700 dark:text-slate-300">Status Financeiro</th>
                     <th className="px-6 py-4 text-sm font-bold text-slate-700 dark:text-slate-300 text-center">Ações Operacionais</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.map((aluno) => (
-                    <tr key={aluno.id} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                    <tr key={aluno.alunoId} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
                       <td className="px-6 py-4">
                         <p className="font-bold text-slate-800 dark:text-white">{aluno.nome}</p>
-                        <p className="text-xs text-slate-500">Matrícula: {aluno.id}</p>
+                        <p className="text-xs text-slate-500">Matrícula: {aluno.matricula}</p>
                       </td>
                       <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{aluno.turma}</td>
                       <td className="px-6 py-4 font-medium text-slate-700 dark:text-slate-300">{aluno.ultimaPaga}</td>
                       <td className="px-6 py-4">
-                        {aluno.statusMensalidade === "Em Dia" && <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"><CheckCircle2 size={14}/> Em Dia</span>}
+                        {(aluno.statusMensalidade === "Em Dia" || aluno.statusMensalidade === "Pago") && <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"><CheckCircle2 size={14}/> Em Dia</span>}
                         {aluno.statusMensalidade === "Pendente" && <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"><Clock size={14}/> Vence Hoje</span>}
                         {aluno.statusMensalidade === "Atrasado" && <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"><AlertCircle size={14}/> {aluno.diasAtraso} dias de atraso</span>}
                       </td>
                       <td className="px-6 py-4 text-center">
                         <div className="flex items-center justify-center gap-2">
-                          <button title="Gerar 2ª Via do Boleto" className="p-2 bg-slate-100 text-slate-600 hover:bg-blue-100 hover:text-blue-600 dark:bg-slate-800 dark:text-slate-400 dark:hover:text-blue-400 rounded-lg transition"><FileText size={18}/></button>
-                          <button title="Enviar Cobrança por Email/WhatsApp" className="p-2 bg-slate-100 text-slate-600 hover:bg-amber-100 hover:text-amber-600 dark:bg-slate-800 dark:text-slate-400 dark:hover:text-amber-400 rounded-lg transition"><Send size={18}/></button>
-                          <button onClick={() => darBaixaManual(aluno.nome)} title="Dar baixa manual (Pagamento no balcão)" className="p-2 bg-slate-100 text-slate-600 hover:bg-green-100 hover:text-green-600 dark:bg-slate-800 dark:text-slate-400 dark:hover:text-green-400 rounded-lg transition"><DollarSign size={18} className="lucide lucide-dollar-sign"/></button>
+                          <button 
+                            onClick={() => gerarSegundaVia(aluno)}
+                            disabled={!aluno.faturaId || processandoId === aluno.alunoId}
+                            title="Gerar 2ª Via do Boleto" 
+                            className="p-2 bg-slate-100 text-slate-600 hover:bg-blue-100 hover:text-blue-600 dark:bg-slate-800 dark:text-slate-400 dark:hover:text-blue-400 rounded-lg transition disabled:opacity-50"
+                          >
+                            {processandoId === aluno.alunoId ? <Loader2 size={18} className="animate-spin" /> : <FileText size={18}/>}
+                          </button>
+                          
+                          <button title="Enviar Lembrete por E-mail (Futuro)" className="p-2 bg-slate-100 text-slate-600 hover:bg-amber-100 hover:text-amber-600 dark:bg-slate-800 dark:text-slate-400 dark:hover:text-amber-400 rounded-lg transition disabled:opacity-50">
+                            <Send size={18}/>
+                          </button>
+
+                          <button 
+                            onClick={() => darBaixaManual(aluno)}
+                            disabled={!aluno.faturaId || aluno.statusMensalidade === "Pago" || processandoId === aluno.alunoId}
+                            title={aluno.statusMensalidade === "Pago" ? "Fatura já paga" : "Dar baixa manual (Pagamento no balcão)"} 
+                            className="p-2 bg-slate-100 text-slate-600 hover:bg-green-100 hover:text-green-600 dark:bg-slate-800 dark:text-slate-400 dark:hover:text-green-400 rounded-lg transition disabled:opacity-50"
+                          >
+                            <DollarSign size={18} />
+                          </button>
                         </div>
                       </td>
                     </tr>
                   ))}
+                  {filtered.length === 0 && (
+                    <tr><td colSpan={5} className="text-center py-12 text-slate-500">Nenhum aluno encontrado.</td></tr>
+                  )}
                 </tbody>
               </table>
             </div>

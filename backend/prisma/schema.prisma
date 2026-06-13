@@ -68,6 +68,7 @@ model Aluno {
   frequencias   Frequencia[]
   notas         Nota[]
   requisicoes   Requisicao[]
+  faturas       Fatura[]
 
   @@map("alunos")
 }
@@ -303,4 +304,21 @@ model Requisicao {
   criadoEm           DateTime @default(now())
 
   @@map("requisicoes")
+  
+}
+
+// MÓDULO FINANCEIRO
+model Fatura {
+  id          String   @id @default(uuid())
+  referencia  String   // Ex: "Mensalidade - Maio/2026"
+  vencimento  String   // Ex: "2026-05-10"
+  valor       Float    // Usamos Float para garantir precisão matemática
+  status      String   @default("Pendente") // "Pago", "Pendente", "Atrasado"
+
+  alunoId     String
+  aluno       Aluno    @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+
+  criadoEm    DateTime @default(now())
+
+  @@map("faturas")
 }
