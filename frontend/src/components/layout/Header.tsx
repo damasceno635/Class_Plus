@@ -2,7 +2,7 @@ import { LogOut, User as UserIcon, Moon, Sun, Bell } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useNavigate } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../../services/api";
 
 const roleTranslations: Record<string, string> = {
@@ -17,20 +17,26 @@ export default function Header() {
   const { user, logout } = useAuth();
   const { darkMode, toggleTheme, profileImage, setProfileImage } = useTheme();
   const navigate = useNavigate();
+  const [notificacoesNaoLidas, setNotificacoesNaoLidas] = useState(0);
 
-  // MÁGICA ATUALIZADA: Agora ele escuta a mudança de "user?.id". 
-  // Sempre que alguém novo logar, ele força a atualização (com foto ou null).
   useEffect(() => {
     if (user) {
+      // Busca a foto de perfil
       api.get('/perfil')
-        .then(response => {
-          // Se tiver foto ele põe, se não tiver ele limpa a que estava lá!
-          setProfileImage(response.data.fotoUrl || '');
-        })
+        .then(response => setProfileImage(response.data.fotoUrl || ''))
         .catch(error => console.error("Erro ao carregar foto no header:", error));
+      
+      // Busca notificações para o contador
+      api.get('/notificacoes')
+        .then(response => {
+          const naoLidas = response.data.filter((n: any) => !n.lida).length;
+          setNotificacoesNaoLidas(naoLidas);
+        })
+        .catch(error => console.error("Erro ao carregar notificações no header:", error));
+
     } else {
-      // Se não tem user (saiu), garante que a foto está limpa
       setProfileImage('');
+      setNotificacoesNaoLidas(0);
     }
   }, [user?.id, setProfileImage]);
 
@@ -56,10 +62,17 @@ export default function Header() {
 
         {/* NOTIFICAÇÃO */}
         <button
+          onClick={() => navigate("/notificacoes")}
+          title="Ver Notificações"
           className="relative p-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:scale-105 transition-all"
         >
           <Bell size={20} className="text-slate-700 dark:text-white" />
-          <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-red-500" />
+          
+          {notificacoesNaoLidas > 0 && (
+            <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white border-2 border-white dark:border-slate-900">
+              {notificacoesNaoLidas > 9 ? '9+' : notificacoesNaoLidas}
+            </span>
+          )}
         </button>
 
         {/* BOTÃO TEMA */}

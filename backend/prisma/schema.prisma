@@ -25,6 +25,7 @@ model User {
   aluno       Aluno?
   funcionario Funcionario?
   roteiros    Roteiro[]
+  notificacoes Notificacao[]
 
   @@map("users") // Nome da tabela no banco
 }
@@ -321,4 +322,19 @@ model Fatura {
   criadoEm    DateTime @default(now())
 
   @@map("faturas")
+}
+
+// MÓDULO DE NOTIFICAÇÕES
+model Notificacao {
+  id        String   @id @default(uuid())
+  titulo    String
+  mensagem  String
+  lida      Boolean  @default(false)
+  
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  criadoEm  DateTime @default(now())
+
+  @@map("notificacoes")
 }

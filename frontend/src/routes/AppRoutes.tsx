@@ -45,6 +45,9 @@ import Declarations from "../pages/declaration/Declarations";
 // Backup
 import Backup from "../pages/backup/Backup";
 
+// Notificações
+import Notifications from "../pages/notification/Notifications";
+
 // Interface atualizada para aceitar controle de cargos
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -105,6 +108,8 @@ export default function AppRoutes() {
       <Route path="/relatorios" element={<ProtectedRoute> <Declarations /> </ProtectedRoute>} />
 
       <Route path="/backup" element={<ProtectedRoute> <Backup /> </ProtectedRoute>} />
+
+      <Route path="/notificacoes" element={<ProtectedRoute> <Notifications /> </ProtectedRoute>} />
 
       {/* ===================================================== */}
       {/* CONTROLE DE NÍVEL PARA FUNCIONÁRIOS                  */}

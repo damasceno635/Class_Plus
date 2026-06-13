@@ -1667,4 +1667,44 @@ routes.get('/relatorios/gerar', authMiddleware, async (req, res) => {
   }
 });
 
+// ROTAS DE NOTIFICAÇÕES
+// 1. Buscar as notificações do utilizador logado
+routes.get('/notificacoes', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const notificacoes = await prisma.notificacao.findMany({
+      where: { userId: req.userId },
+      orderBy: { criadoEm: 'desc' }
+    });
+    return res.json(notificacoes);
+  } catch (error) {
+    return res.status(500).json({ error: "Erro ao buscar notificações." });
+  }
+});
+
+// 2. Marcar uma notificação específica como lida
+routes.put('/notificacoes/:id/lida', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    await prisma.notificacao.updateMany({
+      where: { id: req.params.id, userId: req.userId },
+      data: { lida: true }
+    });
+    return res.json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ error: "Erro ao atualizar notificação." });
+  }
+});
+
+// 3. Marcar TODAS como lidas
+routes.put('/notificacoes/lidas', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    await prisma.notificacao.updateMany({
+      where: { userId: req.userId, lida: false },
+      data: { lida: true }
+    });
+    return res.json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ error: "Erro ao atualizar notificações." });
+  }
+});
+
 export default routes;
