@@ -1,24 +1,15 @@
 import { Link } from "react-router-dom";
 import { useState, useMemo, useEffect } from "react";
-import {
-  Plus,
-  Eye,
-  Pencil,
-  Trash2,
-  FileText,
-  Search,
-  Loader2, // <- ADICIONAMOS O LOADER AQUI
-} from "lucide-react";
+import { Plus, Eye, Pencil, Trash2, FileText, Search, Loader2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import Sidebar from "../../components/layout/Sidebar";
 import Header from "../../components/layout/Header";
 import Footer from "../../components/layout/Footer";
 import { api } from "../../services/api";
-
-// @ts-ignore - Importação da biblioteca de PDF
+import { useAuth } from "../../contexts/AuthContext"; 
 import html2pdf from "html2pdf.js";
 
 type Aluno = {
-  id: string; // Garantimos que o ID é tratado como string
+  id: string; 
   matricula: string;
   nome: string;
   status: string;
@@ -36,11 +27,17 @@ const statusColorMap: Record<string, string> = {
 };
 
 export default function Alunos() {
+  const { user } = useAuth(); 
+  const isCoordinator = user?.cargo === "coordinator";
+
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [alunoParaExcluir, setAlunoParaExcluir] = useState<Aluno | null>(null);
+
+  const [paginaAtual, setPaginaAtual] = useState(1);
+  const [totalPaginas, setTotalPaginas] = useState(1);
+  const [totalItens, setTotalItens] = useState(0);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   
-  // ESTADO PARA CONTROLAR QUAL BOTÃO DE PDF ESTÁ A GIRAR
   const [gerandoPdfId, setGerandoPdfId] = useState<string | null>(null);
   
   const [feedback, setFeedback] = useState<{
@@ -51,15 +48,19 @@ export default function Alunos() {
   useEffect(() => {
     async function carregarAlunos() {
       try {
-        const response = await api.get('/alunos');
-        setAlunos(response.data);
+        // Envia a página e o limite desejados para o backend
+        const response = await api.get(`/alunos?page=${paginaAtual}&limit=${itemsPerPage}`);
+        
+        // Resposta está dividida em "data" e "meta"
+        setAlunos(response.data.data); 
+        setTotalPaginas(response.data.meta.totalPaginas);
+        setTotalItens(response.data.meta.total);
       } catch (error) {
-        console.error("Erro ao carregar os alunos do banco de dados.", error);
-        setFeedback({ type: "error", message: "Falha ao carregar a lista de alunos." });
+        console.error("Erro", error);
       }
     }
     carregarAlunos();
-  }, []);
+  }, [paginaAtual, itemsPerPage]);
 
   const filteredAlunos = useMemo(() => {
     const term = searchTerm.toLowerCase().trim();
@@ -69,33 +70,29 @@ export default function Alunos() {
         aluno.nome.toLowerCase().includes(term) ||
         aluno.matricula.includes(term)
     );
-  }, [alunos, searchTerm]);
+  }, [alunos, searchTerm]); 
 
-  const handleDelete = async () => {
-    if (!alunoParaExcluir) return;
-    try {
-      await api.delete(`/alunos/${alunoParaExcluir.id}`);
-      setAlunos((prev) => prev.filter((a) => a.id !== alunoParaExcluir.id));
+  const handleDelete = async (id: string, nome: string) => {
+    if (!window.confirm(`Tem certeza que deseja excluir o(a) aluno(a) ${nome}?`)) return;
+    try { 
+      await api.delete(`/alunos/${id}`);
+      setAlunos((prev) => prev.filter((a) => a.id !== id));
       setFeedback({ type: "success", message: "Aluno e acessos excluídos com sucesso!" });
     } catch (error: any) {
       console.error("Erro ao excluir", error);
       setFeedback({ type: "error", message: error.response?.data?.error || "Erro ao excluir o aluno. Tente novamente." });
     } finally {
-      setAlunoParaExcluir(null);
       setTimeout(() => setFeedback(null), 3000);
     }
   };
 
-  // MÁGICA: FUNÇÃO PARA GERAR PDF DIRETO DA LISTA
   const handleGerarPDFDireto = async (alunoBasico: Aluno) => {
     try {
-      setGerandoPdfId(alunoBasico.id); // Faz o botão girar
+      setGerandoPdfId(alunoBasico.id); 
       
-      // 1. Busca os dados completos deste aluno no backend
       const response = await api.get(`/alunos/${alunoBasico.id}`);
       const aluno = response.data;
 
-      // 2. Monta um documento HTML profissional (invisível na tela) usando inline-styles para o PDF ler
       const htmlContent = `
         <div style="font-family: Arial, sans-serif; color: #1e293b; padding: 40px; max-width: 800px; margin: 0 auto;">
           <div style="display: flex; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 30px;">
@@ -158,7 +155,6 @@ export default function Alunos() {
         </div>
       `;
 
-      // 3. Converte a string HTML num elemento DOM para o gerador de PDF ler
       const container = document.createElement('div');
       container.innerHTML = htmlContent;
 
@@ -170,16 +166,26 @@ export default function Alunos() {
         jsPDF: { unit: "mm", format: "a4", orientation: "portrait" }
       } as const;
 
-      // 4. Executa o Download
       await html2pdf().set(opcoes).from(container).save();
 
     } catch (error) {
       console.error("Erro ao gerar PDF", error);
       setFeedback({ type: "error", message: "Erro ao buscar os dados para gerar o PDF." });
     } finally {
-      setGerandoPdfId(null); // Pára a animação do botão
+      setGerandoPdfId(null); 
     }
   };
+
+  function setCurrentPage(page: number) {
+    // garante página dentro dos limites e atualiza o estado
+    const p = Math.max(1, Math.min(page, totalPaginas || 1));
+    setPaginaAtual(p);
+    // rola a área principal para o topo para melhorar a navegação
+    try {
+      const main = document.querySelector('main');
+      if (main) main.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch {}
+  }
 
   return (
     <div className="flex min-h-screen bg-slate-100 dark:bg-slate-950">
@@ -199,13 +205,17 @@ export default function Alunos() {
                 Gestão acadêmica de estudantes
               </p>
             </div>
-            <Link
-              to="/alunos/novo"
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-2xl font-semibold transition-all w-fit"
-            >
-              <Plus size={18} />
-              Novo Aluno
-            </Link>
+            
+            {/* OCULTO PARA COORDENADOR */}
+            {!isCoordinator && (
+              <Link
+                to="/alunos/novo"
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-2xl font-semibold transition-all w-fit"
+              >
+                <Plus size={18} />
+                Novo Aluno
+              </Link>
+            )}
           </div>
 
           {/* Feedback */}
@@ -223,9 +233,9 @@ export default function Alunos() {
             </div>
           )}
 
-          {/* Busca */}
-          <div className="mb-6">
-            <div className="relative w-full max-w-lg">
+          {/* Busca e Paginação Topo */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <div className="relative w-full max-w-md">
               <Search
                 size={18}
                 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
@@ -237,6 +247,19 @@ export default function Alunos() {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-12 pr-4 py-3 rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
               />
+            </div>
+            <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+              <span>Itens por página:</span>
+              <select 
+                value={itemsPerPage} 
+                onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                className="p-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+              </select>
             </div>
           </div>
 
@@ -261,9 +284,7 @@ export default function Alunos() {
                       className="border-t border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
                     >
                       <Td>{aluno.matricula}</Td>
-                      <Td className="font-medium text-slate-800 dark:text-white">
-                        {aluno.nome}
-                      </Td>
+                      <Td className="font-medium text-slate-800 dark:text-white">{aluno.nome}</Td>
                       <Td>
                         <span
                           className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
@@ -278,63 +299,27 @@ export default function Alunos() {
                       <Td>{`${aluno.ano} ${aluno.serie}`}</Td>
                       <Td>
                         <div className="flex items-center gap-2">
+                          {/* Visualizar */}
                           <Link
                             to={`/alunos/visualizar/${aluno.id}`}
                             aria-label={`Visualizar ${aluno.nome}`}
                             title="Visualizar"
-                            className="
-                              p-2 rounded-xl transition-all duration-200
-                              bg-slate-100 text-slate-600
-                              dark:bg-slate-800 dark:text-slate-300
-                              hover:bg-blue-200 hover:text-blue-800
-                              dark:hover:bg-blue-900/40 dark:hover:text-blue-500
-                            "
+                            className="p-2 rounded-xl transition-all duration-200 bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
                           >
                             <Eye size={16} />
                           </Link>
 
-                          <Link
-                            to={`/alunos/editar/${aluno.id}`}
-                            aria-label={`Editar ${aluno.nome}`}
-                            title="Editar"
-                            className="
-                              p-2 rounded-xl transition-all duration-200
-                              bg-slate-100 text-slate-600
-                              dark:bg-slate-800 dark:text-slate-300
-                              hover:bg-amber-200 hover:text-amber-800
-                              dark:hover:bg-amber-900/40 dark:hover:text-amber-500
-                            "
-                          >
-                            <Pencil size={16} />
-                          </Link>
-
-                          <button
-                            onClick={() => setAlunoParaExcluir(aluno)}
-                            aria-label={`Excluir ${aluno.nome}`}
-                            title="Excluir"
-                            className="
-                              p-2 rounded-xl transition-all duration-200
-                              bg-slate-100 text-slate-600
-                              dark:bg-slate-800 dark:text-slate-300
-                              hover:bg-red-200 hover:text-red-700
-                              dark:hover:bg-red-900/40 dark:hover:text-red-500
-                            "
-                          >
-                            <Trash2 size={16} />
-                          </button>
-
+                          {/* Gerar PDF */}
                           <button
                             onClick={() => handleGerarPDFDireto(aluno)}
                             disabled={gerandoPdfId === aluno.id}
                             aria-label={`Gerar ficha de ${aluno.nome}`}
                             title="Gerar PDF"
-                            className={`
-                              p-2 rounded-xl transition-all duration-200
-                              ${gerandoPdfId === aluno.id 
-                                ? 'bg-emerald-600 text-white cursor-wait opacity-80' 
-                                : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 hover:bg-emerald-200 hover:text-emerald-800 dark:hover:bg-emerald-900/40 dark:hover:text-emerald-500'
-                              }
-                            `}
+                            className={`p-2 rounded-xl transition-all duration-200 ${
+                              gerandoPdfId === aluno.id
+                                ? 'bg-emerald-100 text-emerald-400 dark:bg-emerald-900/30 dark:text-emerald-300 cursor-wait opacity-70'
+                                : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-900/50'
+                            }`}
                           >
                             {gerandoPdfId === aluno.id ? (
                               <Loader2 size={16} className="animate-spin" />
@@ -342,6 +327,30 @@ export default function Alunos() {
                               <FileText size={16} />
                             )}
                           </button>
+
+                          {/* Editar - Oculto para Coordenador */}
+                          {!isCoordinator && (
+                            <Link
+                              to={`/alunos/editar/${aluno.id}`}
+                              aria-label={`Editar ${aluno.nome}`}
+                              title="Editar"
+                              className="p-2 rounded-xl transition-all duration-200 bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-900/50"
+                            >
+                              <Pencil size={16} />
+                            </Link>
+                          )}
+
+                          {/* Excluir - Oculto para Coordenador */}
+                          {!isCoordinator && (
+                            <button
+                              onClick={() => handleDelete(aluno.id, aluno.nome)}
+                              aria-label={`Excluir ${aluno.nome}`}
+                              title="Excluir"
+                              className="p-2 rounded-xl transition-all duration-200 bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
                         </div>
                       </Td>
                     </tr>
@@ -356,50 +365,81 @@ export default function Alunos() {
               )}
             </div>
           </div>
-        </main>
 
-        {/* Modal de exclusão */}
-        {alunoParaExcluir && (
-          <div
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="modal-title"
-          >
-            <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-6 md:p-8 shadow-2xl border border-slate-200 dark:border-slate-800">
-              <h2
-                id="modal-title"
-                className="text-xl md:text-2xl font-bold text-slate-800 dark:text-white mb-4"
-              >
-                Confirmar exclusão
-              </h2>
-              <p className="text-slate-600 dark:text-slate-300 mb-8 leading-relaxed">
-                Deseja realmente excluir o aluno{" "}
-                <strong className="text-slate-800 dark:text-white">
-                  {alunoParaExcluir.nome}
-                </strong>
-                ?<br />
-                Esta ação não poderá ser desfeita.
-              </p>
-              <div className="flex flex-col sm:flex-row justify-end gap-3">
-                <button
-                  onClick={() => setAlunoParaExcluir(null)}
-                  autoFocus
-                  className="px-5 py-3 rounded-2xl bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white font-medium hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+          {/* PAGINAÇÃO */}
+          {totalItens > 0 && (
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mt-6">
+              <div className="text-sm text-slate-500 dark:text-slate-400">
+                Mostrando {(paginaAtual - 1) * itemsPerPage + 1} - {Math.min(paginaAtual * itemsPerPage, totalItens)} de {totalItens} registros
+              </div>
+              <div className="flex items-center gap-2">
+                
+                {/* Botão Primeira Página */}
+                <button 
+                  onClick={() => setCurrentPage(1)} 
+                  disabled={paginaAtual === 1}
+                  className="p-2 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                  title="Primeira página"
                 >
-                  Cancelar
+                  <ChevronsLeft size={18} />
                 </button>
-                <button
-                  onClick={handleDelete}
-                  className="px-5 py-3 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-medium transition-colors"
+                
+                {/* Botão Página Anterior */}
+                <button 
+                  onClick={() => setCurrentPage(paginaAtual - 1)} 
+                  disabled={paginaAtual === 1}
+                  className="p-2 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                  title="Página anterior"
                 >
-                  Excluir
+                  <ChevronLeft size={18} />
                 </button>
+
+                {/* Números das Páginas */}
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(totalPaginas, 5) }, (_, i) => {
+                    let pageNum;
+                    if (totalPaginas <= 5) pageNum = i + 1;
+                    else if (paginaAtual <= 3) pageNum = i + 1;
+                    else if (paginaAtual >= totalPaginas - 2) pageNum = totalPaginas - 4 + i;
+                    else pageNum = paginaAtual - 2 + i;
+                    if (pageNum < 1 || pageNum > totalPaginas) return null;
+                    return (
+                      <button 
+                        key={pageNum} 
+                        onClick={() => setCurrentPage(pageNum)} 
+                        className={`w-10 h-10 rounded-xl font-semibold transition ${pageNum === paginaAtual ? 'bg-blue-600 text-white' : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'}`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Botão Próxima Página */}
+                <button 
+                  onClick={() => setCurrentPage(paginaAtual + 1)} 
+                  disabled={paginaAtual === totalPaginas}
+                  className="p-2 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                  title="Próxima página"
+                >
+                  <ChevronRight size={18} />
+                </button>
+                
+                {/* Botão Última Página */}
+                <button 
+                  onClick={() => setCurrentPage(totalPaginas)} 
+                  disabled={paginaAtual === totalPaginas}
+                  className="p-2 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                  title="Última página"
+                >
+                  <ChevronsRight size={18} />
+                </button>
+
               </div>
             </div>
-          </div>
-        )}
+          )}
 
+        </main>
         <Footer />
       </div>
     </div>

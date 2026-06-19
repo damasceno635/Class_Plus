@@ -2,7 +2,7 @@ interface MetricCardProps {
   title: string;
   value: string;
   icon?: React.ReactNode;
-  trend?: number; // Opcional: mostrar tendência de crescimento
+  trend?: number; 
 }
 
 export default function MetricCard({ title, value, icon, trend }: MetricCardProps) {

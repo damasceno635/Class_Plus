@@ -1,16 +1,14 @@
-// 1. CORREÇÃO: Importando o ReactNode com o "type"
 import { createContext, useContext, useState, useEffect } from "react";
 import type { ReactNode } from "react";
 import { api } from "../services/api";
 
-// 2. CORREÇÃO: Criando e exportando o tipo Cargo para o Login.tsx poder usar
 export type Cargo = "admin" | "secretary" | "coordinator" | "teacher" | "student";
 
 interface User {
   id: string;
   nome: string;
   email: string;
-  cargo: Cargo; // Usando o tipo que acabamos de criar
+  cargo: Cargo; 
 }
 
 interface AuthContextData {
@@ -26,7 +24,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Quando o usuário abre a página, verificamos se ele já estava logado antes
+  // Quando o usuário abre a página, verifica se ele já estava logado antes
   useEffect(() => {
     const storagedUser = localStorage.getItem("@ClassPlus:user");
     const storagedToken = localStorage.getItem("@ClassPlus:token");
@@ -39,12 +37,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function login(email: string, senha: string) {
     try {
-      // Fazemos o POST para a nossa API real
+      // POST para a API real
       const response = await api.post("/login", { email, senha });
 
       const { user, token } = response.data;
 
-      // Salvamos o token e os dados do usuário no navegador (para não deslogar ao atualizar a página)
+      // Salva o token e os dados do usuário no navegador (para não deslogar ao atualizar a página)
       localStorage.setItem("@ClassPlus:token", token);
       localStorage.setItem("@ClassPlus:user", JSON.stringify(user));
 

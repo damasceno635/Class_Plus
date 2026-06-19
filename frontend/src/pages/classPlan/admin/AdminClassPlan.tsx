@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import type { ReactNode } from "react";
-import { Eye, Search, CheckCircle2, X, FileText, Loader2 } from "lucide-react";
+import { Eye, Search, CheckCircle2, X, FileText, Loader2, Trash2 } from "lucide-react";
 import Sidebar from "../../../components/layout/Sidebar";
 import Header from "../../../components/layout/Header";
 import Footer from "../../../components/layout/Footer";
@@ -23,13 +23,26 @@ export default function AdminClassPlan() {
     async function fetchRoteiros() {
       try {
         const response = await api.get('/roteiros');
-        setRoteiros(response.data); // A API já filtra e só devolve os "Aprovados" para o Admin
+        const aprovados = response.data.filter((r: Roteiro) => r.status === 'Aprovado');
+        setRoteiros(aprovados);
       } catch (error) {
         console.error("Erro ao carregar roteiros", error);
       }
     }
     fetchRoteiros();
   }, []);
+
+  const handleDelete = async (id: string, nome: string) => {
+    if (window.confirm(`Tem certeza que deseja excluir permanentemente o roteiro "${nome}" do sistema?`)) {
+      try {
+        await api.delete(`/roteiros/${id}`);
+        // Remove visualmente da tabela após excluir no banco
+        setRoteiros((prev) => prev.filter((r) => r.id !== id));
+      } catch (error) {
+        alert("Erro ao excluir o roteiro.");
+      }
+    }
+  };
 
   const filteredRoteiros = useMemo(() => {
     const term = searchTerm.toLowerCase().trim();
@@ -122,7 +135,14 @@ export default function AdminClassPlan() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-slate-50 dark:bg-slate-800">
-                  <tr className="text-left"><Th>Professor</Th><Th>Data</Th><Th>Título do Plano</Th><Th>Turma</Th><Th>Status</Th><Th className="text-center">Ações</Th></tr>
+                  <tr className="text-left">
+                    <Th>Professor</Th>
+                    <Th>Data</Th>
+                    <Th>Título do Plano</Th>
+                    <Th>Turma</Th>
+                    <Th>Status</Th>
+                    <Th className="text-left">Ações</Th>
+                  </tr>
                 </thead>
                 <tbody>
                   {filteredRoteiros.map((roteiro) => (
@@ -137,17 +157,28 @@ export default function AdminClassPlan() {
                         </span>
                       </Td>
                       <Td>
-                        <div className="flex items-center justify-center gap-2">
-                          <button onClick={() => setSelectedRoteiro(roteiro)} title="Ver Detalhes" className="action-btn flex items-center justify-center bg-slate-600 hover:bg-slate-700">
+                        <div className="flex items-center justify-start gap-2"> {/* ← alinhamento à esquerda */}
+                          <button onClick={() => setSelectedRoteiro(roteiro)} title="Visualizar" className="p-2 rounded-xl transition-all duration-200 bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50">
                             <Eye size={16} />
                           </button>
                           <button 
                             onClick={() => handleGerarPDF(roteiro)} 
                             disabled={gerandoPdfId === roteiro.id}
                             title="Gerar PDF" 
-                            className={`action-btn flex items-center justify-center ${gerandoPdfId === roteiro.id ? 'bg-emerald-600 cursor-wait opacity-80' : 'bg-emerald-600 hover:bg-emerald-700'}`}
+                            className={`p-2 rounded-xl transition-all duration-200 ${
+                              gerandoPdfId === roteiro.id 
+                              ? 'bg-emerald-100 text-emerald-400 dark:bg-emerald-900/30 dark:text-emerald-300 cursor-wait opacity-70' 
+                              : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-900/50'
+                            }`}
                           >
                             {gerandoPdfId === roteiro.id ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
+                          </button>
+                          <button 
+                            onClick={() => handleDelete(roteiro.id, roteiro.titulo)} 
+                            title="Excluir" 
+                            className="p-2 rounded-xl transition-all duration-200 bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50"
+                          >
+                            <Trash2 size={16} />
                           </button>
                         </div>
                       </Td>

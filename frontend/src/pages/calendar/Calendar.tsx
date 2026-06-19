@@ -18,10 +18,7 @@ import Header from "../../components/layout/Header";
 import Footer from "../../components/layout/Footer";
 import { useAuth } from "../../contexts/AuthContext";
 
-/* ===================================================== */
-/* TYPES & INTERFACES                                    */
-/* ===================================================== */
-
+/* TYPES & INTERFACES */
 type TipoEvento = "academic" | "administrative" | "holiday" | "meeting";
 
 interface Evento {
@@ -67,10 +64,7 @@ const MESES = [
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
 ];
 
-/* ===================================================== */
-/* MAIN COMPONENT                                        */
-/* ===================================================== */
-
+/* MAIN COMPONENT */
 export default function Calendar() {
   const { user } = useAuth();
   const isAdmin = user?.cargo === "admin";
@@ -418,9 +412,7 @@ export default function Calendar() {
           </div>
         </main>
 
-        {/* ===================================================== */}
-        {/* MODAL: FORMULÁRIO (CRIAR / EDITAR)                    */}
-        {/* ===================================================== */}
+        {/* MODAL: FORMULÁRIO (CRIAR / EDITAR) */}
         {isFormModalOpen && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fade-in">
             <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl p-6 md:p-8 shadow-2xl border border-slate-200 dark:border-slate-800">
@@ -526,9 +518,7 @@ export default function Calendar() {
           </div>
         )}
 
-        {/* ===================================================== */}
-        {/* MODAL: DETALHES (GERAL PARA TODOS OS CARGOS)           */}
-        {/* ===================================================== */}
+        {/* MODAL: DETALHES (GERAL PARA TODOS OS CARGOS) */}
         {selectedEvent && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-6 md:p-8 shadow-2xl border border-slate-200 dark:border-slate-800">

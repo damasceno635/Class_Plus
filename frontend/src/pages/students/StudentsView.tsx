@@ -4,9 +4,8 @@ import { FileText, Pencil, ArrowLeft, AlertCircle, Loader2 } from "lucide-react"
 import Sidebar from "../../components/layout/Sidebar";
 import Header from "../../components/layout/Header";
 import Footer from "../../components/layout/Footer";
-import { api } from "../../services/api"; 
-
-// @ts-ignore - Importação da biblioteca de PDF (ignora falta de tipos nativos se houver)
+import { api } from "../../services/api";
+import { useAuth } from "../../contexts/AuthContext";
 import html2pdf from "html2pdf.js";
 
 type Aluno = {
@@ -44,6 +43,9 @@ type Aluno = {
 };
 
 export default function VisualizarAluno() {
+  const { user } = useAuth();
+  const isCoordinator = user?.cargo === "coordinator";
+
   const { id } = useParams();
   const navigate = useNavigate();
 
@@ -70,7 +72,7 @@ export default function VisualizarAluno() {
     loadAluno();
   }, [id]);
 
-  // MÁGICA DA GERAÇÃO DO PDF ISOLADO (Substituindo o modelo antigo)
+  // GERAÇÃO DO PDF ISOLADO
   const handleGerarPDF = () => {
     if (!aluno) return;
 
@@ -211,12 +213,15 @@ export default function VisualizarAluno() {
               </div>
             </div>
             <div className="flex gap-3">
-              <Link
-                to={`/alunos/editar/${id}`}
-                className="flex items-center gap-2 bg-yellow-500 hover:bg-yellow-600 text-white px-5 py-3 rounded-2xl font-semibold transition-all"
-              >
-                <Pencil size={18} /> Editar
-              </Link>
+              {!isCoordinator && (
+                <Link
+                  to={`/alunos/editar/${id}`}
+                  className="flex items-center gap-2 bg-yellow-500 hover:bg-yellow-600 text-white px-5 py-3 rounded-2xl font-semibold transition-all"
+                >
+                  <Pencil size={18} /> Editar
+                </Link>
+              )}
+              
               <button
                 onClick={handleGerarPDF}
                 className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-5 py-3 rounded-2xl font-semibold transition-all cursor-pointer"
@@ -226,7 +231,6 @@ export default function VisualizarAluno() {
             </div>
           </div>
 
-          {/* AJUSTE: Adicionado o id="ficha-aluno" e um padding extra interno para a impressão ficar perfeita */}
           <div id="ficha-aluno" className="grid xl:grid-cols-3 gap-6 p-2 bg-slate-100 dark:bg-slate-950">
             {/* Perfil */}
             <section className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm h-fit">
@@ -252,7 +256,6 @@ export default function VisualizarAluno() {
               </div>
             </section>
 
-            {/* Demais seções */}
             <section className="xl:col-span-2 space-y-6">
               <Card title="Dados Pessoais">
                 <Info label="CPF" value={aluno.cpf} />
@@ -339,7 +342,7 @@ export default function VisualizarAluno() {
                     ))}
                   </ul>
                 ) : (
-                  <p className="text-slate-500">Nenhuma allergy informada.</p>
+                  <p className="text-slate-500">Nenhuma alergia informada.</p>
                 )}
               </Card>
             </section>

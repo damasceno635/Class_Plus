@@ -11,8 +11,8 @@ function authMiddleware(req, res, next) {
     if (!authHeader) {
         return res.status(401).json({ error: 'Acesso negado. Token não fornecido.' });
     }
-    // O formato que chega é: "Bearer hsdfhushdfuh83y823y8273yr..."
-    // Vamos separar a palavra "Bearer" do código do token
+    
+    // Separar a palavra "Bearer" do código do token
     const parts = authHeader.split(' ');
     if (parts.length !== 2) {
         return res.status(401).json({ error: 'Erro de Token.' });
@@ -22,12 +22,12 @@ function authMiddleware(req, res, next) {
         return res.status(401).json({ error: 'Token mal formatado.' });
     }
     try {
-        // 2. A Mágica acontece aqui: o JWT tenta abrir o token usando a sua senha secreta
+        // 2. O JWT tenta abrir o token usando a senha secreta
         const decoded = jsonwebtoken_1.default.verify(token, process.env.JWT_SECRET);
-        // 3. Se deu certo, colamos o ID e o Cargo do usuário na requisição
+        // 3. Cola o ID e o Cargo do usuário na requisição
         req.userId = decoded.id;
         req.userCargo = decoded.cargo;
-        // 4. Liberamos a passagem! Pode continuar para a rota.
+        // 4. Libera a passagem para continuar a rota
         return next();
     }
     catch (err) {

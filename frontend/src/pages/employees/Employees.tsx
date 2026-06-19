@@ -1,20 +1,19 @@
-import { useState, useMemo, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Eye, Pencil, Trash2, FileText, Search, Loader2 } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { Plus, Eye, Pencil, Trash2, FileText, Search, Loader2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import Sidebar from "../../components/layout/Sidebar";
 import Header from "../../components/layout/Header";
 import Footer from "../../components/layout/Footer";
 import { api } from "../../services/api";
 import { useAuth } from "../../contexts/AuthContext";
-
-// @ts-ignore - Importação da biblioteca de PDF
 import html2pdf from "html2pdf.js";
 
 interface Funcionario {
   id: string;
   nome: string;
   cargo: string;
-  contrato: string;
+  ra: string;
+  contrato: any;
   status: "Ativo" | "Inativo";
 }
 
@@ -26,47 +25,54 @@ const statusColorMap: Record<string, string> = {
 export default function Funcionarios() {
   const [funcionarios, setFuncionarios] = useState<Funcionario[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [funcionarioParaExcluir, setFuncionarioParaExcluir] = useState<Funcionario | null>(null);
   const [gerandoPdfId, setGerandoPdfId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   
   const { user } = useAuth();
   const isAdmin = user?.cargo === "admin";
 
+  const [paginaAtual, setPaginaAtual] = useState(1);
+  const [totalPaginas, setTotalPaginas] = useState(1);
+  const [totalItens, setTotalItens] = useState(0);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
   useEffect(() => {
     async function carregarFuncionarios() {
       try {
-        const response = await api.get('/funcionarios');
-        setFuncionarios(response.data);
+        // Envia a página desejada para o backend
+        const response = await api.get(`/funcionarios?page=${paginaAtual}&limit=${itemsPerPage}`);
+        
+        // A resposta está dividida em "data" e "meta"
+        setFuncionarios(response.data.data);
+        setTotalPaginas(response.data.meta.totalPaginas);
+        setTotalItens(response.data.meta.total);
       } catch (error) {
-        console.error("Erro ao carregar funcionários:", error);
-        setFeedback({ type: "error", message: "Erro ao carregar os dados." });
+        console.error("Erro", error);
       }
     }
     carregarFuncionarios();
-  }, []);
+  }, [paginaAtual, itemsPerPage]);
 
   const filteredFuncionarios = useMemo(() => {
     const term = searchTerm.toLowerCase().trim();
     if (!term) return funcionarios;
-    return funcionarios.filter((f) => f.nome.toLowerCase().includes(term));
+    return funcionarios.filter((f) => f.nome.toLowerCase().includes(term) || f.ra.toLowerCase().includes(term));
   }, [funcionarios, searchTerm]);
 
-  const handleDelete = async () => {
-    if (!funcionarioParaExcluir) return;
+  const handleDelete = async (id: string, nome: string) => {
+    if (!window.confirm(`Tem certeza que deseja excluir o(a) funcionário(a) ${nome}?`)) return;
     try {
-      await api.delete(`/funcionarios/${funcionarioParaExcluir.id}`);
-      setFuncionarios((prev) => prev.filter((f) => f.id !== funcionarioParaExcluir.id));
+      await api.delete(`/funcionarios/${id}`);
+      setFuncionarios((prev) => prev.filter((f) => f.id !== id));
       setFeedback({ type: "success", message: `Funcionário removido com sucesso.` });
     } catch (error: any) {
       setFeedback({ type: "error", message: "Erro ao excluir." });
     } finally {
-      setFuncionarioParaExcluir(null);
       setTimeout(() => setFeedback(null), 3000);
     }
   };
 
-  // MÁGICA: FUNÇÃO PARA GERAR PDF DIRETO DA LISTA
+  // FUNÇÃO PARA GERAR PDF DIRETO DA LISTA
   const handleGerarPDFDireto = async (funcionarioBasico: Funcionario) => {
     try {
       setGerandoPdfId(funcionarioBasico.id); // Faz o botão girar
@@ -75,7 +81,7 @@ export default function Funcionarios() {
       const response = await api.get(`/funcionarios/${funcionarioBasico.id}`);
       const func = response.data;
 
-      // 2. Monta um documento HTML profissional (invisível na tela) usando inline-styles
+      // 2. Monta um documento HTML usando inline-styles
       const htmlContent = `
         <div style="font-family: Arial, sans-serif; color: #1e293b; padding: 40px; max-width: 800px; margin: 0 auto; background-color: #ffffff;">
           <div style="display: flex; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 30px;">
@@ -136,7 +142,7 @@ export default function Funcionarios() {
         jsPDF: { unit: "mm", format: "a4", orientation: "portrait" as const } 
       };
 
-      // 🔥 FALTANDO: gera e baixa o PDF
+      // 4. Gera e baixa o PDF
       await html2pdf().set(opcoes).from(container).save();
 
     } catch (error) {
@@ -146,6 +152,17 @@ export default function Funcionarios() {
       setGerandoPdfId(null); 
     }
   };
+
+  function setCurrentPage(page: number) {
+    // garante página dentro dos limites e atualiza o estado
+    const p = Math.max(1, Math.min(page, totalPaginas || 1));
+    setPaginaAtual(p);
+    // rola a área principal para o topo para melhorar a navegação
+    try {
+      const main = document.querySelector('main');
+      if (main) main.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch {}
+  }
 
   return (
     <div className="flex min-h-screen bg-slate-100 dark:bg-slate-950">
@@ -174,16 +191,33 @@ export default function Funcionarios() {
             </div>
           )}
 
-          <div className="mb-6">
-            <div className="relative w-full max-w-lg">
-              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+          {/* Busca e Paginação Topo */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <div className="relative w-full max-w-md">
+              <Search
+                size={18}
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+              />
               <input
                 type="text"
-                placeholder="Buscar por nome..."
+                placeholder="Buscar por nome ou RA..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-12 pr-4 py-3 rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
               />
+            </div>
+            <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+              <span>Itens por página:</span>
+              <select 
+                value={itemsPerPage} 
+                onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                className="p-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+              </select>
             </div>
           </div>
 
@@ -192,8 +226,9 @@ export default function Funcionarios() {
               <table className="w-full">
                 <thead className="bg-slate-50 dark:bg-slate-800">
                   <tr className="text-left">
+                    <Th>Registro</Th>
                     <Th>Nome</Th>
-                    <Th>Cargo</Th>
+                    <Th>Cargo</Th>              
                     <Th>Contrato</Th>
                     <Th>Status</Th>
                     <Th>Ações</Th>
@@ -202,6 +237,7 @@ export default function Funcionarios() {
                 <tbody>
                   {filteredFuncionarios.map((funcionario) => (
                     <tr key={funcionario.id} className="border-t border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                      <Td>{funcionario.ra}</Td>
                       <Td className="font-medium text-slate-800 dark:text-white">{funcionario.nome}</Td>
                       <Td>{funcionario.cargo}</Td>
                       <Td>{funcionario.contrato}</Td>
@@ -212,23 +248,27 @@ export default function Funcionarios() {
                       </Td>
                       <Td>
                         <div className="flex items-center gap-2">
-                          <Link to={`/funcionarios/visualizar/${funcionario.id}`} className="p-2 rounded-xl transition-all duration-200 bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 hover:bg-blue-200 hover:text-blue-800 dark:hover:bg-blue-900/40 dark:hover:text-blue-500">
+                          {/* Visualizar */}
+                          <Link 
+                            to={`/funcionarios/visualizar/${funcionario.id}`} 
+                            aria-label={`Visualizar ${funcionario.nome}`}
+                            title="Visualizar"
+                            className="p-2 rounded-xl transition-all duration-200 bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
+                          >
                             <Eye size={16} />
                           </Link>
-                          {isAdmin && (
-                            <>
-                              <Link to={`/funcionarios/editar/${funcionario.id}`} className="p-2 rounded-xl transition-all duration-200 bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 hover:bg-amber-200 hover:text-amber-800 dark:hover:bg-amber-900/40 dark:hover:text-amber-500">
-                                <Pencil size={16} />
-                              </Link>
-                              <button onClick={() => setFuncionarioParaExcluir(funcionario)} className="p-2 rounded-xl transition-all duration-200 bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 hover:bg-red-200 hover:text-red-700 dark:hover:bg-red-900/40 dark:hover:text-red-500">
-                                <Trash2 size={16} />
-                              </button>
-                            </>
-                          )}
+
+                          {/* Gerar PDF direto da lista */}
                           <button 
                             onClick={() => handleGerarPDFDireto(funcionario)}
                             disabled={gerandoPdfId === funcionario.id}
-                            className={`p-2 rounded-xl transition-all duration-200 ${gerandoPdfId === funcionario.id ? 'bg-emerald-600 text-white cursor-wait opacity-80' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 hover:bg-emerald-200 hover:text-emerald-800 dark:hover:bg-emerald-900/40 dark:hover:text-emerald-500'}`}
+                            aria-label={`Gerar ficha de ${funcionario.nome}`}
+                            title="Gerar PDF"
+                            className={`p-2 rounded-xl transition-all duration-200 ${
+                              gerandoPdfId === funcionario.id 
+                                ? 'bg-emerald-100 text-emerald-400 dark:bg-emerald-900/30 dark:text-emerald-300 cursor-wait opacity-70' 
+                                : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-900/50'
+                              }`}
                           >
                             {gerandoPdfId === funcionario.id ? (
                               <Loader2 size={16} className="animate-spin" />
@@ -236,6 +276,28 @@ export default function Funcionarios() {
                               <FileText size={16} />
                             )}
                           </button>
+
+                          {/* Editar e Excluir só para Admin */}
+                          {isAdmin && (
+                            <>
+                              <Link 
+                                to={`/funcionarios/editar/${funcionario.id}`} 
+                                aria-label={`Editar ${funcionario.nome}`}
+                                title="Editar"
+                                className="p-2 rounded-xl transition-all duration-200 bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-900/50"
+                              >
+                                <Pencil size={16} />
+                              </Link>
+                              <button 
+                                onClick={() => handleDelete(funcionario.id, funcionario.nome)} 
+                                aria-label={`Excluir ${funcionario.nome}`}
+                                title="Excluir"
+                                className="p-2 rounded-xl transition-all duration-200 bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </Td>
                     </tr>
@@ -250,27 +312,83 @@ export default function Funcionarios() {
               )}
             </div>
           </div>
-        </main>
 
-        {funcionarioParaExcluir && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
-            <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-6 md:p-8 shadow-2xl border border-slate-200 dark:border-slate-800">
-              <h2 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-white mb-4">Confirmar exclusão</h2>
-              <p className="text-slate-600 dark:text-slate-300 mb-8 leading-relaxed">
-                Deseja realmente excluir o funcionário <strong className="text-slate-800 dark:text-white">{funcionarioParaExcluir.nome}</strong>?<br />
-                Esta ação não poderá ser desfeita.
-              </p>
-              <div className="flex flex-col sm:flex-row justify-end gap-3">
-                <button onClick={() => setFuncionarioParaExcluir(null)} autoFocus className="px-5 py-3 rounded-2xl bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white font-medium hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors">
-                  Cancelar
+          {/* PAGINAÇÃO */}
+          {totalItens > 0 && (
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mt-6">
+              <div className="text-sm text-slate-500 dark:text-slate-400">
+                Mostrando {(paginaAtual - 1) * itemsPerPage + 1} - {Math.min(paginaAtual * itemsPerPage, totalItens)} de {totalItens} registros
+              </div>
+              <div className="flex items-center gap-2">
+                
+                {/* Botão Primeira Página */}
+                <button 
+                  onClick={() => setCurrentPage(1)} 
+                  disabled={paginaAtual === 1}
+                  className="p-2 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                  title="Primeira página"
+                >
+                  <ChevronsLeft size={18} />
                 </button>
-                <button onClick={handleDelete} className="px-5 py-3 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-medium transition-colors">
-                  Excluir
+                
+                {/* Botão Página Anterior */}
+                <button 
+                  onClick={() => setCurrentPage(paginaAtual - 1)} 
+                  disabled={paginaAtual === 1}
+                  className="p-2 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                  title="Página anterior"
+                >
+                  <ChevronLeft size={18} />
                 </button>
+
+                {/* Números das Páginas */}
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(totalPaginas, 5) }, (_, i) => {
+                    let pageNum;
+                    if (totalPaginas <= 5) pageNum = i + 1;
+                    else if (paginaAtual <= 3) pageNum = i + 1;
+                    else if (paginaAtual >= totalPaginas - 2) pageNum = totalPaginas - 4 + i;
+                    else pageNum = paginaAtual - 2 + i;
+                    if (pageNum < 1 || pageNum > totalPaginas) return null;
+                    return (
+                      <button 
+                        key={pageNum} 
+                        onClick={() => setCurrentPage(pageNum)} 
+                        className={`w-10 h-10 rounded-xl font-semibold transition ${pageNum === paginaAtual ? 'bg-blue-600 text-white' : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'}`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Botão Próxima Página */}
+                <button 
+                  onClick={() => setCurrentPage(paginaAtual + 1)} 
+                  disabled={paginaAtual === totalPaginas}
+                  className="p-2 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                  title="Próxima página"
+                >
+                  <ChevronRight size={18} />
+                </button>
+                
+                {/* Botão Última Página */}
+                <button 
+                  onClick={() => setCurrentPage(totalPaginas)} 
+                  disabled={paginaAtual === totalPaginas}
+                  className="p-2 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                  title="Última página"
+                >
+                  <ChevronsRight size={18} />
+                </button>
+
               </div>
             </div>
-          </div>
-        )}
+          )}
+
+        </main>
+
+        
         <Footer />
       </div>
     </div>

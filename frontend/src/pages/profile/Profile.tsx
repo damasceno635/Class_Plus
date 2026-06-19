@@ -2,11 +2,9 @@ import { type ChangeEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom"; 
 import { useForm } from "react-hook-form";
 import { Camera, LogOut, Save, X, Loader2 } from "lucide-react";
-
 import Sidebar from "../../components/layout/Sidebar";
 import Header from "../../components/layout/Header";
 import Footer from "../../components/layout/Footer";
-
 import { useTheme } from "../../contexts/ThemeContext";
 import { useAuth } from "../../contexts/AuthContext";
 import { api } from "../../services/api";
@@ -37,7 +35,7 @@ export default function Profile() {
 
   const { register, handleSubmit, setValue, setError, formState: { errors } } = useForm<ProfileFormData>();
 
-  // Carrega os dados reais do banco de dados ao abrir a tela
+  // Carrega os dados do banco de dados ao abrir a tela
   useEffect(() => {
     window.scrollTo(0, 0);
     async function carregarPerfil() {
@@ -196,7 +194,7 @@ export default function Profile() {
                     </div>
 
                     <div className="flex flex-col gap-2">
-                      <label className="font-medium text-slate-700 dark:text-white">Cargo (Somente leitura)</label>
+                      <label className="font-medium text-slate-700 dark:text-white">Cargo</label>
                       <input readOnly value={userRoleTranslated} className="w-full p-4 rounded-2xl border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 text-slate-500 cursor-not-allowed" />
                     </div>
 

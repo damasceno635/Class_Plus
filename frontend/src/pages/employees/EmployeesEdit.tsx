@@ -12,9 +12,7 @@ import Header from "../../components/layout/Header";
 import Footer from "../../components/layout/Footer";
 import { api } from "../../services/api";
 
-/* ===================================================== */
-/* FORMATADORES (MÁSCARAS) – IDÊNTICOS AO NEW */
-/* ===================================================== */
+/* FORMATADORES (MÁSCARAS) */
 const formatCPF = (value: string) => {
   return value
     .replace(/\D/g, "")
@@ -58,9 +56,7 @@ const formatMoeda = (value: string) => {
   return `R$ ${v}`;
 };
 
-/* ===================================================== */
-/* TYPES (MESMO DO NEW) */
-/* ===================================================== */
+/* TYPES */
 interface Disciplina { disciplina: string; cargaHoraria: string; turma: string; serie: string; periodo: string; }
 interface Formacao { instituicao: string; cnpj: string; modalidade: string; periodoInicio: string; periodoFinal: string; }
 interface Experiencia { empresa: string; cnpj: string; modalidade: string; periodoInicio: string; periodoFinal: string; }
@@ -74,9 +70,7 @@ interface FuncionarioFormData {
   foto?: FileList; rgFuncionario?: FileList; comprovanteResidencia?: FileList; diploma?: FileList; referencias?: FileList;
 }
 
-/* ===================================================== */
 /* COMPONENTE PRINCIPAL */
-/* ===================================================== */
 export default function EditarFuncionario() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -84,7 +78,7 @@ export default function EditarFuncionario() {
   const [loadingInicial, setLoadingInicial] = useState(true);
   const [errorInicial, setErrorInicial] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
-  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const { register, control, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<FuncionarioFormData>({
     defaultValues: {
@@ -181,12 +175,12 @@ export default function EditarFuncionario() {
   const onSubmit = async (data: FuncionarioFormData) => {
     // Validação para professores: pelo menos uma disciplina
     if (data.vaga === "Professor(a)" && data.disciplinas.length === 0) {
-      setFeedback({ type: "error", message: "Para o cargo de Professor(a), adicione pelo menos uma disciplina." });
+      setToast({ type: "error", message: "Para o cargo de Professor(a), adicione pelo menos uma disciplina." });
       return;
     }
 
     setSalvando(true);
-    setFeedback(null);
+    setToast(null);
     try {
       const formData = new FormData();
 
@@ -228,10 +222,10 @@ export default function EditarFuncionario() {
 
       await api.put(`/funcionarios/${id}`, formData, { headers: { "Content-Type": "multipart/form-data" } });
 
-      setFeedback({ type: "success", message: "Funcionário atualizado com sucesso!" });
+      setToast({ type: "success", message: "Funcionário atualizado com sucesso! Redirecionando..." });
       setTimeout(() => navigate(-1), 1500);
     } catch (err: any) {
-      setFeedback({ type: "error", message: err.response?.data?.error || "Erro ao atualizar." });
+      setToast({ type: "error", message: err.response?.data?.error || "Erro ao atualizar." });
     } finally {
       setSalvando(false);
     }
@@ -287,9 +281,23 @@ export default function EditarFuncionario() {
             </div>
           </div>
 
-          {feedback && (
-            <div className={`mb-4 p-3 rounded-xl text-sm font-medium ${feedback.type === "success" ? "bg-green-100 text-green-800 dark:bg-green-900/30" : "bg-red-100 text-red-800 dark:bg-red-900/30"}`}>
-              {feedback.message}
+          {toast && (
+            <div className="fixed top-6 left-1/2 transform -translate-x-1/2 z-50 animate-fade-in-down">
+              <div
+                className={`
+                  px-6 py-4 rounded-2xl shadow-lg backdrop-blur-sm border flex items-center gap-3
+                  ${
+                    toast.type === "success"
+                      ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200"
+                      : "bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200"
+                  }
+                `}
+              >
+                <span className="text-xl">
+                  {toast.type === "success" ? "✅" : "❌"}
+                </span>
+                <span className="font-medium">{toast.message}</span>
+              </div>
             </div>
           )}
 
@@ -421,9 +429,7 @@ export default function EditarFuncionario() {
   );
 }
 
-/* ===================================================== */
 /* COMPONENTES AUXILIARES (com suporte a erro) */
-/* ===================================================== */
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow border border-slate-200 dark:border-slate-800">

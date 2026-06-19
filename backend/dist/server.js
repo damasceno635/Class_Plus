@@ -14,7 +14,7 @@ app.use(express_1.default.json());
 const path_1 = __importDefault(require("path"));
 app.use(express_1.default.json());
 app.use('/uploads', express_1.default.static(path_1.default.resolve(__dirname, '..', 'uploads')));
-// Avisamos o app para usar as rotas que criamos
+// Avisar o app para usar as rotas já criadas
 app.use(routes_1.default);
 app.listen(PORT, () => {
     console.log(`Servidor rodando na porta ${PORT} 🚀`);

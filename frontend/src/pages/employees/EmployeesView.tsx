@@ -4,9 +4,8 @@ import { FileText, Pencil, ArrowLeft, AlertCircle, Loader2 } from "lucide-react"
 import Sidebar from "../../components/layout/Sidebar";
 import Header from "../../components/layout/Header";
 import Footer from "../../components/layout/Footer";
+import { useAuth } from "../../contexts/AuthContext";
 import { api } from "../../services/api";
-
-// @ts-ignore
 import html2pdf from "html2pdf.js";
 
 type Funcionario = {
@@ -37,6 +36,9 @@ export default function VisualizarFuncionario() {
   const [funcionario, setFuncionario] = useState<Funcionario | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const { user } = useAuth();
+  const isAdmin = user?.cargo === "admin";
 
   useEffect(() => {
     async function loadFuncionario() {
@@ -152,7 +154,7 @@ export default function VisualizarFuncionario() {
         <main className="flex-1 p-4 md:p-8 max-w-[1600px] mx-auto w-full">
           <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
             <div className="flex items-center gap-4">
-              <button onClick={() => navigate(-1)} className="p-2 rounded-full text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-800 transition">
+              <button onClick={() => navigate(-1)} className="p-2 rounded-full text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-800 transition" title="Voltar">
                 <ArrowLeft size={24} />
               </button>
               <div>
@@ -160,11 +162,19 @@ export default function VisualizarFuncionario() {
                 <p className="text-slate-500 dark:text-slate-400">Visualização completa do cadastro</p>
               </div>
             </div>
-            <div className="flex gap-3">
-              <Link to={`/funcionarios/editar/${id}`} className="flex items-center gap-2 bg-yellow-500 hover:bg-yellow-600 text-white px-5 py-3 rounded-2xl font-semibold transition-all">
-                <Pencil size={18} /> Editar
-              </Link>
-              <button onClick={handleGerarPDF} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-5 py-3 rounded-2xl font-semibold transition-all cursor-pointer">
+            <div className="flex flex-wrap gap-3">
+              {isAdmin && (
+                <Link
+                  to={`/funcionarios/editar/${id}`}
+                  className="flex items-center gap-2 bg-yellow-500 hover:bg-yellow-600 text-white px-5 py-3 rounded-2xl font-semibold transition-all"
+                >
+                  <Pencil size={18} /> Editar
+                </Link>
+              )}
+              <button
+                onClick={handleGerarPDF}
+                className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-5 py-3 rounded-2xl font-semibold transition-all cursor-pointer"
+              >
                 <FileText size={18} /> Gerar PDF
               </button>
             </div>

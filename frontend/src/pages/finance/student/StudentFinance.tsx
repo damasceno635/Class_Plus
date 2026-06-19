@@ -5,8 +5,6 @@ import Header from "../../../components/layout/Header";
 import Footer from "../../../components/layout/Footer";
 import { api } from "../../../services/api";
 import { useAuth } from "../../../contexts/AuthContext";
-
-// @ts-ignore
 import html2pdf from "html2pdf.js";
 
 interface Fatura {
@@ -59,7 +57,7 @@ export default function StudentFinance() {
     return dataStr.split("-").reverse().join("/");
   };
 
-  // MÁGICA: GERADOR DE PDF INTELIGENTE (BOLETO OU RECIBO)
+  // GERADOR DE PDF (BOLETO OU RECIBO)
   const handleGerarDocumento = async (fatura: Fatura, tipo: "boleto" | "recibo") => {
     setGerandoPdfId(fatura.id);
 
@@ -149,7 +147,7 @@ export default function StudentFinance() {
             <p className="text-slate-500 dark:text-slate-400">Acompanhe as suas mensalidades e realize pagamentos.</p>
           </div>
 
-          {/* Destaque - Próxima Fatura */}
+          {/* Próxima Fatura */}
           {proximaFatura && (
             <div className={`rounded-3xl p-6 md:p-8 text-white shadow-lg mb-8 flex flex-col md:flex-row items-center justify-between gap-6 ${proximaFatura.status === 'Atrasado' ? 'bg-gradient-to-r from-red-600 to-rose-700' : 'bg-gradient-to-r from-blue-600 to-indigo-700'}`}>
               <div className="flex items-center gap-4">

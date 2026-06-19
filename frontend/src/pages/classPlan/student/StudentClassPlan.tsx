@@ -5,8 +5,6 @@ import Sidebar from "../../../components/layout/Sidebar";
 import Header from "../../../components/layout/Header";
 import Footer from "../../../components/layout/Footer";
 import { api } from "../../../services/api";
-
-// @ts-ignore
 import html2pdf from "html2pdf.js";
 
 interface Roteiro {
@@ -25,7 +23,8 @@ export default function StudentClassPlan() {
     async function fetchRoteiros() {
       try {
         const response = await api.get('/roteiros');
-        setRoteiros(response.data);
+        const apenasAprovados = response.data.filter((r: Roteiro) => r.status === 'Aprovado');
+        setRoteiros(apenasAprovados);
       } catch (error) {
         console.error("Erro ao carregar roteiros", error);
       }
@@ -140,14 +139,18 @@ export default function StudentClassPlan() {
                       </Td>
                       <Td>
                         <div className="flex items-center justify-center gap-2">
-                          <button onClick={() => setSelectedRoteiro(roteiro)} title="Ver Detalhes" className="action-btn flex items-center justify-center bg-slate-600 hover:bg-slate-700">
+                          <button onClick={() => setSelectedRoteiro(roteiro)} title="Visualizar" className="p-2 rounded-xl transition-all duration-200 bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50">
                             <Eye size={16} />
                           </button>
                           <button 
                             onClick={() => handleGerarPDF(roteiro)} 
                             disabled={gerandoPdfId === roteiro.id}
                             title="Gerar PDF" 
-                            className={`action-btn flex items-center justify-center ${gerandoPdfId === roteiro.id ? 'bg-emerald-600 cursor-wait opacity-80' : 'bg-emerald-600 hover:bg-emerald-700'}`}
+                            className={`p-2 rounded-xl transition-all duration-200 ${
+                              gerandoPdfId === roteiro.id 
+                                ? 'bg-emerald-100 text-emerald-400 dark:bg-emerald-900/30 dark:text-emerald-300 cursor-wait opacity-70'
+                                : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-900/50'
+                            }`}
                           >
                             {gerandoPdfId === roteiro.id ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
                           </button>

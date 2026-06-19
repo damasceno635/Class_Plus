@@ -3,7 +3,7 @@ import path from 'path';
 import crypto from 'crypto';
 
 export const multerConfig = {
-  // Configura para salvar direto no disco (na pasta uploads que você criou)
+  // Configura para salvar direto no disco (na pasta uploads)
   storage: multer.diskStorage({
     destination: path.resolve(__dirname, '..', '..', 'uploads'),
     filename: (req, file, cb) => {

@@ -15,9 +15,7 @@ import Header from "../../components/layout/Header";
 import Footer from "../../components/layout/Footer";
 import { api } from "../../services/api";
 
-/* --------------------------------------------------- */
-/* TYPES                                              */
-/* --------------------------------------------------- */
+/* TYPES */ 
 interface Responsavel {
   parentesco: string;
   nome: string;
@@ -67,9 +65,7 @@ interface AlunoFormData {
   historicoEscolar?: FileList;
 }
 
-/* --------------------------------------------------- */
-/* MASKED INPUT (Igual ao StudentsNew)                */
-/* --------------------------------------------------- */
+/* MASKED INPUT */
 interface MaskedInputProps<T extends FieldValues> {
   control: Control<T>;
   name: FieldPath<T>;
@@ -145,9 +141,7 @@ function MaskedInput<T extends FieldValues>({
   );
 }
 
-/* --------------------------------------------------- */
-/* COMPONENTE PRINCIPAL                               */
-/* --------------------------------------------------- */
+/* COMPONENTE PRINCIPAL  */
 export default function EditarAluno() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -155,7 +149,7 @@ export default function EditarAluno() {
   const [loadingInicial, setLoadingInicial] = useState(true);
   const [errorInicial, setErrorInicial] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
-  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const {
     register, control, handleSubmit, reset, watch, setValue, setError, formState: { errors },
@@ -187,7 +181,6 @@ export default function EditarAluno() {
     }
   }
 
-  // Carregar dados reais da API
   useEffect(() => {
     if (!id) return;
 
@@ -245,7 +238,6 @@ export default function EditarAluno() {
     }
 
     setSalvando(true);
-    setFeedback(null);
     try {
       const formData = new FormData();
 
@@ -301,17 +293,18 @@ export default function EditarAluno() {
       if (data.comprovanteResidencia && data.comprovanteResidencia.length > 0) formData.append("comprovanteResidencia", data.comprovanteResidencia[0]);
       if (data.historicoEscolar && data.historicoEscolar.length > 0) formData.append("historicoEscolar", data.historicoEscolar[0]);
 
-      // Envio Real via PUT
+      // Envio via PUT
       await api.put(`/alunos/${id}`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      setFeedback({ type: "success", message: "Aluno atualizado com sucesso!" });
-      setTimeout(() => navigate(-1), 1500);
+      setToast({ type: "success", message: "Aluno atualizado com sucesso! Redirecionando..." });
 
+      setTimeout(() => {
+        navigate(-1);
+      }, 1500);
     } catch (err: any) {
-      setFeedback({ type: "error", message: err.response?.data?.error || "Erro ao atualizar." });
-    } finally {
+      setToast({ type: "error", message: err.response?.data?.error || "❌ Erro ao atualizar." });
       setSalvando(false);
     }
   };
@@ -351,8 +344,24 @@ export default function EditarAluno() {
             </div>
           </div>
 
-          {feedback && (
-            <div className={`mb-4 p-3 rounded-xl text-sm font-medium ${feedback.type === "success" ? "bg-green-100 text-green-800 dark:bg-green-900/30" : "bg-red-100 text-red-800 dark:bg-red-900/30"}`}>{feedback.message}</div>
+          {toast && (
+            <div className="fixed top-6 left-1/2 transform -translate-x-1/2 z-50 animate-fade-in-down">
+              <div
+                className={`
+                  px-6 py-4 rounded-2xl shadow-lg backdrop-blur-sm border flex items-center gap-3
+                  ${
+                    toast.type === "success"
+                      ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200"
+                      : "bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200"
+                  }
+                `}
+              >
+                <span className="text-xl">
+                  {toast.type === "success" ? "✅" : "❌"}
+                </span>
+                <span className="font-medium">{toast.message}</span>
+              </div>
+            </div>
           )}
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
@@ -473,9 +482,7 @@ export default function EditarAluno() {
   );
 }
 
-/* --------------------------------------------------- */
-/* COMPONENTES AUXILIARES                             */
-/* --------------------------------------------------- */
+/* COMPONENTES AUXILIARES */
 function Section({ title, children }: { title: string; children: React.ReactNode }) { return (<section className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow border border-slate-200 dark:border-slate-800"><h2 className="text-2xl font-bold mb-6 text-slate-900 dark:text-white">{title}</h2>{children}</section>); }
 function Grid({ children }: { children: React.ReactNode }) { return <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">{children}</div>; }
 function Input({ label, register, type = "text", error }: { label: string; register: UseFormRegisterReturn; type?: string; error?: string }) { return (<div className="flex flex-col gap-2"><label className="font-medium text-slate-700 dark:text-slate-300">{label}</label><input type={type} {...register} className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" />{error && <p className="text-sm text-red-500 mt-1">{error}</p>}</div>); }

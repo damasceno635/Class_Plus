@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { Save, Search, Check, X, BookOpen, UserCheck, CalendarDays, AlertCircle, Loader2 } from "lucide-react";
+import { Save, Search, Check, X, BookOpen, UserCheck, CalendarDays, AlertCircle, Loader2, CheckCircle2 } from "lucide-react";
 import Sidebar from "../../../components/layout/Sidebar";
 import Header from "../../../components/layout/Header";
 import Footer from "../../../components/layout/Footer";
@@ -15,19 +15,24 @@ export default function TeacherMetrics() {
   const [turmas, setTurmas] = useState<{id: string, nome: string}[]>([]);
   const [alunos, setAlunos] = useState<Student[]>([]);
   
-  // SELETORES
+  // SELETORES E FILTROS
   const [selectedTurma, setSelectedTurma] = useState("");
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
   const [selectedBimestre, setSelectedBimestre] = useState("1º Bimestre");
   const [searchTerm, setSearchTerm] = useState("");
   
-  // CONTROLES DE ESTADO E FORMULÁRIOS
+  // ESTADOS DE FORMULÁRIO E FEEDBACK
   const [salvando, setSalvando] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
-  const [frequencias, setFrequencias] = useState<Record<string, { presente: boolean; observacao: string }>>({});
-  const [notas, setNotas] = useState<Record<string, { n1: string; n2: string; n3: string; n4: string }>>({});
+  
+  // STATUS VISUAL (Para avisar se a chamada de hoje já foi feita)
+  const [statusChamada, setStatusChamada] = useState<"pendente" | "realizada">("pendente");
 
-  // 1. CARREGAR AS TURMAS DO PROFESSOR AO ABRIR
+  // DADOS PREENCHIDOS (Frequência e 3 Notas)
+  const [frequencias, setFrequencias] = useState<Record<string, { presente: boolean; observacao: string }>>({});
+  const [notas, setNotas] = useState<Record<string, { n1: string; n2: string; n3: string }>>({});
+
+  // 1. CARREGAR AS TURMAS DO PROFESSOR AO ABRIR A TELA
   useEffect(() => {
     api.get('/diario/turmas').then(res => {
       setTurmas(res.data);
@@ -35,7 +40,7 @@ export default function TeacherMetrics() {
     }).catch(err => console.error(err));
   }, []);
 
-  // 2. CARREGAR ALUNOS QUANDO A TURMA MUDA
+  // 2. CARREGAR OS ALUNOS SEMPRE QUE A TURMA MUDAR
   useEffect(() => {
     if(!selectedTurma) return;
     api.get(`/diario/alunos/${selectedTurma}`).then(res => {
@@ -43,32 +48,40 @@ export default function TeacherMetrics() {
     }).catch(err => console.error(err));
   }, [selectedTurma]);
 
-  // 3. CARREGAR FREQUÊNCIAS (Se mudar de Turma ou Data)
+  // 3. CARREGAR FREQUÊNCIAS (Detetar se já existe chamada naquele dia)
   useEffect(() => {
     if(!selectedTurma || alunos.length === 0) return;
+    
     api.get(`/diario/frequencia?alocacaoId=${selectedTurma}&data=${selectedDate}`).then(res => {
       const freqData = res.data;
       const newFreqState: Record<string, {presente: boolean, observacao: string}> = {};
       
+      if (freqData && freqData.length > 0) {
+        setStatusChamada("realizada");
+      } else {
+        setStatusChamada("pendente");
+      }
+      
       alunos.forEach(a => {
         const existing = freqData.find((f: any) => f.alunoId === a.id);
-        // Se já houver registo no banco puxa, se não assume Presente
+        // Se já tiver registo puxa o do banco, senão por defeito todos vêm presentes
         newFreqState[a.id] = existing ? { presente: existing.presente, observacao: existing.observacao || '' } : { presente: true, observacao: '' };
       });
       setFrequencias(newFreqState);
     });
   }, [selectedTurma, selectedDate, alunos]);
 
-  // 4. CARREGAR NOTAS (Se mudar de Turma ou Bimestre)
+  // 4. CARREGAR NOTAS (Inteligência de separação por Bimestre)
   useEffect(() => {
     if(!selectedTurma || alunos.length === 0) return;
+    
     api.get(`/diario/notas?alocacaoId=${selectedTurma}&bimestre=${selectedBimestre}`).then(res => {
       const notasData = res.data;
-      const newNotasState: Record<string, {n1: string, n2: string, n3: string, n4: string}> = {};
+      const newNotasState: Record<string, {n1: string, n2: string, n3: string}> = {};
       
       alunos.forEach(a => {
         const existing = notasData.find((n: any) => n.alunoId === a.id);
-        newNotasState[a.id] = existing ? { n1: existing.n1||'', n2: existing.n2||'', n3: existing.n3||'', n4: existing.n4||'' } : { n1: '', n2: '', n3: '', n4: '' };
+        newNotasState[a.id] = existing ? { n1: existing.n1||'', n2: existing.n2||'', n3: existing.n3||'' } : { n1: '', n2: '', n3: '' };
       });
       setNotas(newNotasState);
     });
@@ -80,24 +93,24 @@ export default function TeacherMetrics() {
     return alunos.filter(a => a.nome.toLowerCase().includes(term) || a.matricula.includes(term));
   }, [alunos, searchTerm]);
 
-  /* ===================================================== */
-  /* HANDLERS DA TELA                                      */
-  /* ===================================================== */
-
+  /* HANDLERS DA TELA */
   const handleFrequenciaChange = (id: string, presente: boolean) => setFrequencias(prev => ({ ...prev, [id]: { ...prev[id], presente } }));
   const handleObservacaoChange = (id: string, observacao: string) => setFrequencias(prev => ({ ...prev, [id]: { ...prev[id], observacao } }));
-  const handleNotaChange = (id: string, campo: "n1" | "n2" | "n3" | "n4", valor: string) => {
+  
+  const handleNotaChange = (id: string, campo: "n1" | "n2" | "n3", valor: string) => {
+    // Aceita apenas números até 10 com casas decimais
     const regex = /^[0-9]*[.,]?[0-9]*$/;
     if (valor === "" || (regex.test(valor) && parseFloat(valor.replace(',', '.')) <= 10)) {
       setNotas(prev => ({ ...prev, [id]: { ...prev[id], [campo]: valor } }));
     }
   };
 
+  // Média exata dividida pelas 3 métricas
   const calcularMedia = (id: string): string => {
     const n = notas[id];
     if(!n) return "0.0";
-    const valores = [n.n1, n.n2, n.n3, n.n4].map(v => parseFloat(v.replace(',', '.')) || 0);
-    const media = valores.reduce((acc, curr) => acc + curr, 0) / 4;
+    const valores = [n.n1, n.n2, n.n3].map(v => parseFloat(v.replace(',', '.')) || 0);
+    const media = valores.reduce((acc, curr) => acc + curr, 0) / 3;
     return isNaN(media) ? "0.0" : media.toFixed(1);
   };
 
@@ -110,9 +123,15 @@ export default function TeacherMetrics() {
           alunoId, presente: frequencias[alunoId].presente, observacao: frequencias[alunoId].observacao
         }));
         await api.post('/diario/frequencia', { alocacaoId: selectedTurma, data: selectedDate, frequencias: payload });
+        setStatusChamada("realizada");
+
       } else {
         const payload = Object.keys(notas).map(alunoId => ({
-          alunoId, ...notas[alunoId]
+          alunoId, 
+          n1: notas[alunoId].n1, 
+          n2: notas[alunoId].n2, 
+          n3: notas[alunoId].n3,
+          n4: "" // Vazio para evitar erros no banco de dados antigo
         }));
         await api.post('/diario/notas', { alocacaoId: selectedTurma, bimestre: selectedBimestre, notas: payload });
       }
@@ -155,23 +174,25 @@ export default function TeacherMetrics() {
           )}
 
           <div className="bg-white dark:bg-slate-900 rounded-3xl p-4 md:p-6 shadow-sm border border-slate-200 dark:border-slate-800 mb-6 flex flex-wrap items-center justify-between gap-4">
+            
             <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl w-full sm:w-auto overflow-x-auto">
               <button
                 onClick={() => setActiveTab("frequencia")}
                 className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all whitespace-nowrap ${activeTab === "frequencia" ? "bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm" : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"}`}
               >
-                <UserCheck size={18} /> Diário e Frequência
+                <UserCheck size={18} /> Frequência
               </button>
               <button
                 onClick={() => setActiveTab("boletim")}
                 className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all whitespace-nowrap ${activeTab === "boletim" ? "bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm" : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"}`}
               >
-                <BookOpen size={18} /> Lançamento de Notas
+                <BookOpen size={18} /> Notas Bimestrais
               </button>
             </div>
 
-            <div className="flex items-center gap-3 w-full sm:w-auto">
-              <div className="flex-1 sm:w-64">
+            <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+              
+              <div className="flex-1 sm:w-64 min-w-[200px]">
                 <select 
                   value={selectedTurma}
                   onChange={(e) => setSelectedTurma(e.target.value)}
@@ -183,12 +204,18 @@ export default function TeacherMetrics() {
               </div>
 
               {activeTab === "frequencia" ? (
-                <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-1.5 focus-within:ring-2 focus-within:ring-blue-500">
-                  <CalendarDays size={18} className="text-slate-400" />
-                  <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="p-1.5 bg-transparent border-none outline-none text-slate-800 dark:text-white font-medium w-36" />
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-1.5 focus-within:ring-2 focus-within:ring-blue-500">
+                    <CalendarDays size={18} className="text-slate-400" />
+                    <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="p-1.5 bg-transparent border-none outline-none text-slate-800 dark:text-white font-medium w-36" />
+                  </div>
+                  {/* Etiqueta Visual de Chamada Feita ou Pendente */}
+                  <div className={`hidden md:flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap ${statusChamada === 'realizada' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
+                    {statusChamada === 'realizada' ? <><CheckCircle2 size={14} /> Chamada Registada</> : <><AlertCircle size={14} /> Pendente</>}
+                  </div>
                 </div>
               ) : (
-                <div className="flex-1 sm:w-40">
+                <div className="flex-1 sm:w-40 min-w-[150px]">
                   <select value={selectedBimestre} onChange={(e) => setSelectedBimestre(e.target.value)} className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 font-medium">
                     <option value="1º Bimestre">1º Bimestre</option>
                     <option value="2º Bimestre">2º Bimestre</option>
@@ -256,16 +283,15 @@ export default function TeacherMetrics() {
                   <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
                     <tr>
                       <th className="px-6 py-4 text-sm font-bold text-slate-700 dark:text-slate-300">Aluno</th>
-                      <th className="px-4 py-4 text-sm font-bold text-slate-700 dark:text-slate-300 text-center w-28">N1<br/><span className="text-xs font-normal text-slate-500">(Prova)</span></th>
-                      <th className="px-4 py-4 text-sm font-bold text-slate-700 dark:text-slate-300 text-center w-28">N2<br/><span className="text-xs font-normal text-slate-500">(Ativ)</span></th>
-                      <th className="px-4 py-4 text-sm font-bold text-slate-700 dark:text-slate-300 text-center w-28">N3<br/><span className="text-xs font-normal text-slate-500">(Prova)</span></th>
-                      <th className="px-4 py-4 text-sm font-bold text-slate-700 dark:text-slate-300 text-center w-28">N4<br/><span className="text-xs font-normal text-slate-500">(Ativ)</span></th>
-                      <th className="px-6 py-4 text-sm font-bold text-slate-700 dark:text-slate-300 text-center w-32 bg-slate-100 dark:bg-slate-800/80">Média Parcial</th>
+                      <th className="px-4 py-4 text-sm font-bold text-slate-700 dark:text-slate-300 text-center w-32">Prova</th>
+                      <th className="px-4 py-4 text-sm font-bold text-slate-700 dark:text-slate-300 text-center w-32">Atividades</th>
+                      <th className="px-4 py-4 text-sm font-bold text-slate-700 dark:text-slate-300 text-center w-32">Participação</th>
+                      <th className="px-6 py-4 text-sm font-bold text-slate-700 dark:text-slate-300 text-center w-36 bg-slate-100 dark:bg-slate-800/80">Média ({selectedBimestre.split(" ")[0]})</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredAlunos.map((aluno) => {
-                      const state = notas[aluno.id] || { n1: "", n2: "", n3: "", n4: "" };
+                      const state = notas[aluno.id] || { n1: "", n2: "", n3: "" };
                       const mediaFinal = parseFloat(calcularMedia(aluno.id));
                       const estaAbaixo = mediaFinal > 0 && mediaFinal < 6.0;
 
@@ -275,17 +301,21 @@ export default function TeacherMetrics() {
                             <p className="font-bold text-slate-800 dark:text-white">{aluno.nome}</p>
                             <p className="text-xs text-slate-500">Matrícula: {aluno.matricula}</p>
                           </td>
-                          {["n1", "n2", "n3", "n4"].map((nota) => (
-                            <td key={nota} className="px-4 py-4">
-                              <input type="text" value={state[nota as keyof typeof state]} onChange={(e) => handleNotaChange(aluno.id, nota as any, e.target.value)} placeholder="--" className="w-full text-center p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 font-semibold" />
-                            </td>
-                          ))}
+                          <td className="px-4 py-4">
+                            <input type="text" value={state.n1} onChange={(e) => handleNotaChange(aluno.id, "n1", e.target.value)} placeholder="--" className="w-full text-center p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 font-semibold" />
+                          </td>
+                          <td className="px-4 py-4">
+                            <input type="text" value={state.n2} onChange={(e) => handleNotaChange(aluno.id, "n2", e.target.value)} placeholder="--" className="w-full text-center p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 font-semibold" />
+                          </td>
+                          <td className="px-4 py-4">
+                            <input type="text" value={state.n3} onChange={(e) => handleNotaChange(aluno.id, "n3", e.target.value)} placeholder="--" className="w-full text-center p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 font-semibold" />
+                          </td>
                           <td className="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 text-center">
                             <div className="flex flex-col items-center">
                               <span className={`text-xl font-bold ${mediaFinal === 0 ? "text-slate-400" : estaAbaixo ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
                                 {mediaFinal === 0 ? "-" : mediaFinal}
                               </span>
-                              {estaAbaixo && <span className="text-[10px] flex items-center gap-1 text-red-600 font-semibold mt-1"><AlertCircle size={10} /> Abaixo</span>}
+                              {estaAbaixo && <span className="text-[10px] flex items-center gap-1 text-red-600 font-semibold mt-1"><AlertCircle size={10} /> Abaixo da Média</span>}
                             </div>
                           </td>
                         </tr>

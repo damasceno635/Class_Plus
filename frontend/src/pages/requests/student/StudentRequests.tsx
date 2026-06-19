@@ -9,7 +9,7 @@ import { api } from "../../../services/api";
 type StatusRequisicao = "Pendente" | "Em Análise" | "Concluído" | "Negado";
 
 interface RequisicaoAluno {
-  id: string; // Protocolo (REQ-...)
+  id: string; // Protocolo
   realId?: string; // ID do banco
   tipo: string;
   dataSolicitacao: string;
@@ -17,7 +17,7 @@ interface RequisicaoAluno {
   descricao: string;
   respostaSecretaria?: string;
   arquivoAnexo?: string;
-  arquivoSecretaria?: string; // Novo campo para o arquivo gerado pela secretaria
+  arquivoSecretaria?: string; 
 }
 
 const statusStylesMap: Record<StatusRequisicao, { bg: string; text: string; icon: ReactNode }> = {
@@ -150,7 +150,7 @@ export default function StudentRequests() {
                           </span>
                         </td>
                         <td className="px-6 py-4 text-center">
-                          <button onClick={() => setSelectedReq(req)} className="p-2 rounded-xl bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 hover:bg-blue-200 hover:text-blue-800 dark:hover:bg-blue-900/40 dark:hover:text-blue-500 transition-colors inline-flex items-center justify-center cursor-pointer" title="Ver Detalhes">
+                          <button onClick={() => setSelectedReq(req)} className="p-2 rounded-xl transition-all duration-200 bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50" title="Visualizar">
                             <Eye size={16} />
                           </button>
                         </td>
@@ -231,7 +231,6 @@ export default function StudentRequests() {
                     </div>
                   )}
 
-                  {/* ADICIONE ESTE BLOCO AQUI */}
                   {selectedReq.arquivoSecretaria && (
                     <div className="flex items-center justify-between p-3 border border-emerald-200 dark:border-emerald-800 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 mt-3">
                       <div className="flex items-center gap-3">

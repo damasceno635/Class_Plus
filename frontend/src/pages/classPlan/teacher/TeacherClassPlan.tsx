@@ -11,7 +11,8 @@ import {
   XCircle,
   FileEdit,
   X,
-  MessageSquare
+  MessageSquare,
+  AlertCircle
 } from "lucide-react";
 
 import Sidebar from "../../../components/layout/Sidebar";
@@ -19,10 +20,7 @@ import Header from "../../../components/layout/Header";
 import Footer from "../../../components/layout/Footer";
 import { api } from "../../../services/api";
 
-/* ===================================================== */
-/* TYPES & INTERFACES                                    */
-/* ===================================================== */
-
+/* TYPES & INTERFACES */
 type StatusRoteiro = "Rascunho" | "Pendente" | "Aprovado" | "Rejeitado";
 
 interface Roteiro {
@@ -60,16 +58,17 @@ const statusStylesMap: Record<StatusRoteiro, { bg: string; text: string; icon: R
   }
 };
 
-/* ===================================================== */
-/* MAIN COMPONENT                                        */
-/* ===================================================== */
-
+/* MAIN COMPONENT */
 export default function TeacherClassPlan() {
   const [roteiros, setRoteiros] = useState<Roteiro[]>([]);
+  const [turmasDisponiveis, setTurmasDisponiveis] = useState<{id: string, nome: string}[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  
   const [selectedRoteiro, setSelectedRoteiro] = useState<Roteiro | null>(null);
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  
+  // Form states
   const [newTitulo, setNewTitulo] = useState("");
   const [newDisciplina, setNewDisciplina] = useState("");
   const [newTurma, setNewTurma] = useState("");
@@ -78,13 +77,20 @@ export default function TeacherClassPlan() {
   const [newMetodologia, setNewMetodologia] = useState("");
 
   useEffect(() => {
-    async function fetchRoteiros() {
+    async function fetchData() {
       try {
-        const response = await api.get('/roteiros');
-        setRoteiros(response.data);
-      } catch (error) { console.error(error); }
+        // Busca os roteiros
+        const responseRoteiros = await api.get('/roteiros');
+        setRoteiros(responseRoteiros.data);
+
+        // Busca as alocações (Turma + Disciplina) do professor no banco
+        const responseTurmas = await api.get('/diario/turmas');
+        setTurmasDisponiveis(responseTurmas.data);
+      } catch (error) { 
+        console.error(error); 
+      }
     }
-    fetchRoteiros();
+    fetchData();
   }, []);
 
   const filteredRoteiros = useMemo(() => {
@@ -166,6 +172,8 @@ export default function TeacherClassPlan() {
     return `${dia}/${mes}/${ano}`;
   };
 
+  const editingRoteiro = roteiros.find(r => r.id === editingId);
+
   return (
     <div className="flex min-h-screen bg-slate-100 dark:bg-slate-950">
       <Sidebar />
@@ -209,8 +217,7 @@ export default function TeacherClassPlan() {
                   <tr className="text-left">
                     <Th>Data de Aplicação</Th>
                     <Th>Título do Plano</Th>
-                    <Th>Disciplina</Th>
-                    <Th>Turma</Th>
+                    <Th>Turma / Disciplina</Th>
                     <Th>Status</Th>
                     <Th className="text-center">Ações</Th>
                   </tr>
@@ -222,8 +229,10 @@ export default function TeacherClassPlan() {
                       <tr key={roteiro.id} className="border-t border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                         <Td className="font-medium text-slate-600 dark:text-slate-400">{formatarData(roteiro.dataAplicacao)}</Td>
                         <Td className="font-semibold text-slate-800 dark:text-white max-w-xs truncate">{roteiro.titulo}</Td>
-                        <Td>{roteiro.disciplina}</Td>
-                        <Td>{roteiro.turma}</Td>
+                        <Td>
+                          <span className="block text-sm">{roteiro.turma}</span>
+                          <span className="block text-xs text-slate-400">{roteiro.disciplina}</span>
+                        </Td>
                         <Td>
                           <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${style.bg} ${style.text}`}>
                             {style.icon} {roteiro.status}
@@ -233,16 +242,20 @@ export default function TeacherClassPlan() {
                           <div className="flex items-center justify-center gap-2">
                             <button
                               onClick={() => setSelectedRoteiro(roteiro)}
-                              title="Visualizar detalhes"
-                              className="action-btn bg-blue-600 hover:bg-blue-700 flex items-center justify-center"
+                              title="Visualizar"
+                              className="p-2 rounded-xl transition-all duration-200 bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
                             >
                               <Eye size={16} />
                             </button>
-                            {roteiro.status === "Rascunho" && (
+                            
+                            {/* Permite editar Rascunhos E Rejeitados */}
+                            {(roteiro.status === "Rascunho" || roteiro.status === "Rejeitado") && (
                               <button
                                 onClick={() => handleEditRoteiro(roteiro)}
-                                title="Editar rascunho"
-                                className="action-btn bg-amber-500 hover:bg-amber-600 flex items-center justify-center"
+                                title={roteiro.status === "Rejeitado" ? "Corrigir" : "Editar rascunho"}
+                                className={roteiro.status === 'Rejeitado'
+                                  ? 'p-2 rounded-xl transition-all duration-200 bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-900/50'
+                                  : 'p-2 rounded-xl transition-all duration-200 bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700/50'}
                               >
                                 <FileEdit size={16} />
                               </button>
@@ -264,18 +277,30 @@ export default function TeacherClassPlan() {
           </div>
         </main>
 
-        {/* MODAL NOVO / EDIÇÃO */}
+        {/* MODAL EDIÇÃO */}
         {isNewModalOpen && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
             <div className="w-full max-w-3xl bg-white dark:bg-slate-900 rounded-3xl p-6 md:p-8 shadow-2xl border border-slate-200 dark:border-slate-800 max-h-[90vh] overflow-y-auto custom-scrollbar">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-slate-800 dark:text-white">
-                  {editingId ? "Editar Rascunho" : "Criar Roteiro de Aula"}
+                  {editingId ? "Editar Roteiro de Aula" : "Criar Roteiro de Aula"}
                 </h2>
-                <button onClick={fecharModal} className="text-slate-400 hover:text-slate-600 dark:hover:text-white transition">
-                  <X size={24} />
+                <button onClick={fecharModal} title="Fechar" className="text-slate-400 hover:text-slate-600 dark:hover:text-white transition">
+                  <X size={26} />
                 </button>
               </div>
+
+              {/* AVISO DE REJEIÇÃO */}
+              {editingRoteiro?.status === "Rejeitado" && (
+                <div className="mb-6 p-4 rounded-xl border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800/50 flex gap-3">
+                  <AlertCircle className="text-red-600 dark:text-red-400 shrink-0 mt-0.5" size={20} />
+                  <div>
+                    <h4 className="font-bold text-sm text-red-800 dark:text-red-400">Motivo da Rejeição (Coordenação):</h4>
+                    <p className="text-sm text-red-700 dark:text-red-300 mt-1">"{editingRoteiro.feedbackCoordenador}"</p>
+                    <p className="text-xs text-red-600 dark:text-red-400 mt-2 font-semibold">Corrija as informações abaixo e clique em Enviar para nova aprovação.</p>
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-5">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -290,7 +315,7 @@ export default function TeacherClassPlan() {
                     />
                   </div>
                   <div className="flex flex-col gap-2">
-                    <label className="font-semibold text-sm text-slate-700 dark:text-slate-300">Data *</label>
+                    <label className="font-semibold text-sm text-slate-700 dark:text-slate-300">Data de Aplicação *</label>
                     <input
                       type="date"
                       value={newData}
@@ -300,25 +325,32 @@ export default function TeacherClassPlan() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-2">
-                    <label className="font-semibold text-sm text-slate-700 dark:text-slate-300">Disciplina *</label>
-                    <input
-                      type="text"
-                      value={newDisciplina}
-                      onChange={(e) => setNewDisciplina(e.target.value)}
-                      className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="font-semibold text-sm text-slate-700 dark:text-slate-300">Turma *</label>
-                    <input
-                      type="text"
-                      value={newTurma}
-                      onChange={(e) => setNewTurma(e.target.value)}
-                      className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
+                <div className="flex flex-col gap-2">
+                  <label className="font-semibold text-sm text-slate-700 dark:text-slate-300">Turma e Disciplina (Alocação) *</label>
+                  <select
+                    value={newTurma && newDisciplina ? `${newTurma} - ${newDisciplina}` : ""}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (!val) {
+                        setNewTurma("");
+                        setNewDisciplina("");
+                        return;
+                      }
+                      const [turmaPart, disciplinaPart] = val.split(" - ");
+                      setNewTurma(turmaPart?.trim() || "");
+                      setNewDisciplina(disciplinaPart?.trim() || "");
+                    }}
+                    className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Selecione sua turma e disciplina...</option>
+                    {turmasDisponiveis.map(t => (
+                      <option key={t.id} value={t.nome}>{t.nome}</option>
+                    ))}
+                    {/* Fallback caso seja um roteiro antigo que não bate exatamente com o texto atual */}
+                    {newTurma && newDisciplina && !turmasDisponiveis.find(t => t.nome === `${newTurma} - ${newDisciplina}`) && (
+                      <option value={`${newTurma} - ${newDisciplina}`}>{newTurma} - {newDisciplina}</option>
+                    )}
+                  </select>
                 </div>
 
                 <div className="flex flex-col gap-2">
@@ -348,7 +380,7 @@ export default function TeacherClassPlan() {
                     className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold transition"
                   >
                     <FileText size={18} />
-                    {editingId ? "Atualizar Rascunho" : "Salvar Rascunho"}
+                    {editingId ? "Guardar Rascunho" : "Salvar como Rascunho"}
                   </button>
                   <button
                     type="button"
@@ -375,17 +407,17 @@ export default function TeacherClassPlan() {
                   </span>
                   <h2 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-white">{selectedRoteiro.titulo}</h2>
                 </div>
-                <button onClick={() => setSelectedRoteiro(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-white transition">
-                  <X size={24} />
+                <button onClick={() => setSelectedRoteiro(null)} title="Fechar" className="text-slate-400 hover:text-slate-600 dark:hover:text-white transition">
+                  <X size={26} />
                 </button>
               </div>
 
               {selectedRoteiro.feedbackCoordenador && (
-                <div className="mb-6 p-4 rounded-xl border border-slate-200 bg-slate-50 dark:bg-slate-800/20 dark:border-slate-700 flex gap-3">
-                  <MessageSquare className="text-slate-600 dark:text-slate-400 flex-shrink-0 mt-0.5" size={20} />
+                <div className={`mb-6 p-4 rounded-xl border flex gap-3 ${selectedRoteiro.status === 'Rejeitado' ? 'border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-700' : 'border-slate-200 bg-slate-50 dark:bg-slate-800/20 dark:border-slate-700'}`}>
+                  <MessageSquare className={`${selectedRoteiro.status === 'Rejeitado' ? 'text-red-500' : 'text-slate-600 dark:text-slate-400'} flex-shrink-0 mt-0.5`} size={20} />
                   <div>
-                    <h4 className="font-bold text-sm">Feedback da Coordenação</h4>
-                    <p className="text-sm mt-1 italic">"{selectedRoteiro.feedbackCoordenador}"</p>
+                    <h4 className={`font-bold text-sm ${selectedRoteiro.status === 'Rejeitado' ? 'text-red-800 dark:text-red-400' : ''}`}>Feedback da Coordenação</h4>
+                    <p className={`text-sm mt-1 italic ${selectedRoteiro.status === 'Rejeitado' ? 'text-red-700 dark:text-red-300' : ''}`}>"{selectedRoteiro.feedbackCoordenador}"</p>
                   </div>
                 </div>
               )}
@@ -397,8 +429,8 @@ export default function TeacherClassPlan() {
                     <p className="font-semibold text-slate-800 dark:text-white">{selectedRoteiro.disciplina}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Turma</p>
-                    <p className="font-semibold text-slate-800 dark:text-white">{selectedRoteiro.turma}</p>
+                    <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Turma / Data</p>
+                    <p className="font-semibold text-slate-800 dark:text-white">{selectedRoteiro.turma} - {formatarData(selectedRoteiro.dataAplicacao)}</p>
                   </div>
                 </div>
 
@@ -416,12 +448,6 @@ export default function TeacherClassPlan() {
                   </p>
                 </div>
               </div>
-
-              <div className="flex justify-end mt-6 pt-4 border-t border-slate-200 dark:border-slate-800">
-                <button onClick={() => setSelectedRoteiro(null)} className="px-5 py-2.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-white font-semibold hover:opacity-90 transition">
-                  Fechar Visualização
-                </button>
-              </div>
             </div>
           </div>
         )}
@@ -432,9 +458,7 @@ export default function TeacherClassPlan() {
   );
 }
 
-/* ===================================================== */
-/* COMPONENTES AUXILIARES                                */
-/* ===================================================== */
+/* COMPONENTES AUXILIARES */
 function Th({ children, className = "" }: { children: ReactNode; className?: string }) {
   return <th className={`px-6 py-4 text-sm font-bold text-slate-700 dark:text-white whitespace-nowrap ${className}`}>{children}</th>;
 }

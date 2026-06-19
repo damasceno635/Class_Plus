@@ -23,11 +23,11 @@ export default function Login() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // Usamos o await para esperar o backend processar
+      // Usa o await para esperar o backend processar
       await login(email, senha);
       navigate("/dashboard");
     } catch (error) {
-      // O alert já foi dado no AuthContext, ou você pode colocar um estado de erro aqui!
+      // O alert já foi dado no AuthContext
     }
   }
 

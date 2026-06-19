@@ -4,8 +4,6 @@ import Sidebar from "../../../components/layout/Sidebar";
 import Header from "../../../components/layout/Header";
 import Footer from "../../../components/layout/Footer";
 import { api } from "../../../services/api";
-
-// @ts-ignore
 import html2pdf from "html2pdf.js";
 
 interface Transacao {
@@ -158,7 +156,7 @@ export default function AdminFinance() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
               <h1 className="text-3xl font-bold text-slate-800 dark:text-white">Dashboard Financeiro</h1>
-              <p className="text-slate-500 dark:text-slate-400">Visão executiva do fluxo de caixa e inadimplência institucional (Dados Reais).</p>
+              <p className="text-slate-500 dark:text-slate-400">Visão executiva do fluxo de caixa e inadimplência institucional.</p>
             </div>
             <button 
               onClick={handleGerarDRE}

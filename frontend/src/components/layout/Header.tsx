@@ -4,6 +4,7 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { api } from "../../services/api";
+import logo_Header from "../../assets/logo_Header.png";
 
 const roleTranslations: Record<string, string> = {
   admin: "Administrador",
@@ -48,19 +49,21 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-10 w-full bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 py-4 flex items-center justify-between shadow-sm">
-      <div className="flex flex-col items-start leading-tight">
-        <span className="text-lg font-semibold text-slate-800 dark:text-white">
-          Class Plus
-        </span>
+      <div className="flex items-center gap-4 leading-tight">
+        <img src={logo_Header} alt="Logo Class Plus" className="h-10 w-10 object-contain" />
+        <div className="flex flex-col items-start">
+          <span className="text-lg font-semibold text-slate-800 dark:text-white">
+            Class Plus
+          </span>
 
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Gestão Escolar Inteligente
-        </p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Gestão Escolar Inteligente
+          </p>
+        </div>
       </div>
 
       <div className="flex items-center gap-4 sm:gap-6">
 
-        {/* NOTIFICAÇÃO */}
         <button
           onClick={() => navigate("/notificacoes")}
           title="Ver Notificações"
@@ -75,10 +78,10 @@ export default function Header() {
           )}
         </button>
 
-        {/* BOTÃO TEMA */}
         <button
           onClick={toggleTheme}
           aria-label="Alternar tema"
+          title={darkMode ? "Modo claro" : "Modo escuro"}
           className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:scale-105 transition-all text-slate-700 dark:text-white"
         >
           {darkMode ? <Sun size={20} /> : <Moon size={20} />}
@@ -114,7 +117,6 @@ export default function Header() {
             </div>
           </button>
 
-          {/* BOTÃO DE LOGOUT */}
           <button
             onClick={handleLogout}
             title="Sair do sistema"

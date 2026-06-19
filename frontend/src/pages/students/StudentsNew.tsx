@@ -8,17 +8,15 @@ import {
   type FieldValues,
 } from "react-hook-form";
 import type { ReactNode, FocusEvent } from "react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Sidebar from "../../components/layout/Sidebar";
 import Header from "../../components/layout/Header";
 import Footer from "../../components/layout/Footer";
-import { Plus, Trash2, Loader2 } from "lucide-react";
+import { Plus, Trash2, Loader2, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../services/api";
 
-/* --------------------------------------------------- */
-/* TYPES                                              */
-/* --------------------------------------------------- */
+/* TYPES */
 interface Responsavel {
   parentesco: string;
   nome: string;
@@ -68,9 +66,7 @@ interface AlunoFormData {
   historicoEscolar?: FileList;
 }
 
-/* --------------------------------------------------- */
-/* MASKED INPUT (CPF / PHONE / CEP)                   */
-/* --------------------------------------------------- */
+/* MASKED INPUT (CPF / PHONE / CEP) */
 interface MaskedInputProps<T extends FieldValues> {
   control: Control<T>;
   name: FieldPath<T>;
@@ -91,7 +87,6 @@ const applyMaskAndLimit = (value: string, maskType: "cpf" | "phone" | "cep" | "n
   } else if (maskType === "cep") {
     digits = digits.slice(0, 8);
   }
-  // "number" não tem limite de tamanho, apenas não permite letras
 
   if (maskType === "cpf") {
     if (digits.length <= 3) return digits;
@@ -120,24 +115,31 @@ function MaskedInput<T extends FieldValues>({
   placeholder,
   onBlur: externalOnBlur,
 }: MaskedInputProps<T>) {
+  const rules = useMemo(
+    () =>
+      required
+        ? {
+            required: "Preencha este campo.",
+            validate: (val: string) => {
+              const digits = val?.replace(/\D/g, "") || "";
+              if (maskType === "cpf" && digits.length !== 11) return "CPF deve ter 11 números.";
+              if (maskType === "phone" && digits.length !== 11)
+                return "Contato deve ter 11 números (DDD + 9 dígitos).";
+              if (maskType === "cep" && digits.length !== 8) return "CEP deve ter 8 números.";
+              return true;
+            },
+          }
+        : undefined,
+    [required, maskType]
+  );
+
   const {
     field: { onChange, onBlur, value, ref },
     fieldState: { error },
   } = useController({
     control,
     name,
-    rules: required
-      ? {
-          required: "Preencha este campo.",
-          validate: (val: string) => {
-            const digits = val?.replace(/\D/g, "") || "";
-            if (maskType === "cpf" && digits.length !== 11) return "CPF deve ter 11 números.";
-            if (maskType === "phone" && digits.length !== 11) return "Contato deve ter 11 números (DDD + 9 dígitos).";
-            if (maskType === "cep" && digits.length !== 8) return "CEP deve ter 8 números.";
-            return true;
-          },
-        }
-      : undefined,
+    rules,
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -170,9 +172,7 @@ function MaskedInput<T extends FieldValues>({
   );
 }
 
-/* --------------------------------------------------- */
-/* MAIN COMPONENT                                     */
-/* --------------------------------------------------- */
+/* MAIN COMPONENT */
 export default function NovoAluno() {
   const navigate = useNavigate(); // Instanciando a navegação
   const [salvando, setSalvando] = useState(false); // Controle do botão
@@ -234,7 +234,6 @@ export default function NovoAluno() {
   }
 
   const onSubmit = async (data: AlunoFormData) => {
-    // Validações que você já tinha feito
     if (possuiDeficiencia && deficiencias.length === 0) {
       setError("deficiencias", { type: "manual", message: "Adicione pelo menos uma deficiência." });
       return;
@@ -246,10 +245,8 @@ export default function NovoAluno() {
 
     setSalvando(true);
     try {
-      // 1. Criamos o "envelope pardo"
       const formData = new FormData();
 
-      // 2. Colocamos todos os textos lá dentro (Exemplo com os principais)
       formData.append("nome", data.nome);
       formData.append("email", data.email);
       formData.append("cpf", data.cpf);
@@ -271,7 +268,7 @@ export default function NovoAluno() {
 
       formData.append("responsaveis", JSON.stringify(data.responsaveis));
 
-      // CORREÇÃO: Removendo o FileList do JSON para evitar conflito de String no Prisma
+      // Remover o FileList do JSON para evitar conflito de String no Prisma
       if (data.possuiDeficiencia && data.deficiencias.length > 0) {
         const deficienciasLimpas = data.deficiencias.map(def => ({
           nome: def.nome,
@@ -303,21 +300,21 @@ export default function NovoAluno() {
         });
       }
       
-      // 3. Colocamos os arquivos, SE o usuário tiver selecionado algum
+      // 3. Colocar os arquivos, SE o usuário tiver selecionado algum
       if (data.foto && data.foto.length > 0) formData.append("foto", data.foto[0]);
       if (data.rgAluno && data.rgAluno.length > 0) formData.append("rgAluno", data.rgAluno[0]);
       if (data.rgResponsavel && data.rgResponsavel.length > 0) formData.append("rgResponsavel", data.rgResponsavel[0]);
       if (data.comprovanteResidencia && data.comprovanteResidencia.length > 0) formData.append("comprovanteResidencia", data.comprovanteResidencia[0]);
       if (data.historicoEscolar && data.historicoEscolar.length > 0) formData.append("historicoEscolar", data.historicoEscolar[0]);
 
-      // 4. Enviamos para o Backend
+      // 4. Enviar para o Backend
       const response = await api.post("/alunos", formData, {
         headers: {
-          "Content-Type": "multipart/form-data", // Avisamos que estamos mandando arquivos!
+          "Content-Type": "multipart/form-data", // Avisar que está mandando arquivos
         },
       });
 
-      // 5. Mostramos a matrícula/senha gerada para o admin e redirecionamos!
+      // 5. Mostrar a matrícula/senha gerada para o admin e redirecionar
       const { senhaProvisoria } = response.data.credenciaisAcesso;
       alert(`✅ Aluno cadastrado com sucesso!\n\n🔑 Matrícula e Senha Provisória: ${senhaProvisoria}\n(Guarde este número para passar ao aluno)`);
       
@@ -337,9 +334,18 @@ export default function NovoAluno() {
       <div className="flex-1">
         <Header />
         <main className="p-4 md:p-8 max-w-[1600px] mx-auto">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Novo Aluno</h1>
-            <p className="text-slate-600 dark:text-slate-400 mt-1">Cadastro completo de aluno</p>
+          <div className="mb-8 flex items-center gap-4">
+            <button
+              title="Voltar"
+              onClick={() => navigate(-1)}
+              className="p-2 rounded-full text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-800 transition"
+            >
+              <ArrowLeft size={24} />
+            </button>
+            <div>
+              <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Novo Aluno</h1>
+              <p className="text-slate-600 dark:text-slate-400 mt-1">Cadastro completo de aluno</p>
+            </div>
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
@@ -643,9 +649,7 @@ export default function NovoAluno() {
   );
 }
 
-/* --------------------------------------------------- */
-/* COMPONENTES AUXILIARES                             */
-/* --------------------------------------------------- */
+/* COMPONENTES AUXILIARES */
 interface SectionProps {
   title: string;
   children: ReactNode;
@@ -725,7 +729,7 @@ function FileInput({ label, register }: FileInputProps) {
       <label className="font-medium text-slate-700 dark:text-slate-300">{label}</label>
       <input
         type="file"
-        {...register} // Conectamos o input ao formulário
+        {...register} // Conectar o input ao formulário
         className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-700 dark:text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:bg-blue-600 file:text-white hover:file:bg-blue-700 file:transition-all file:cursor-pointer"
       />
     </div>

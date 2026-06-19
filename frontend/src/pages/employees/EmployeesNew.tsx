@@ -8,14 +8,11 @@ import { useState } from "react";
 import Sidebar from "../../components/layout/Sidebar";
 import Header from "../../components/layout/Header";
 import Footer from "../../components/layout/Footer";
-import { Plus, Trash2, Loader2 } from "lucide-react";
+import { Plus, Trash2, Loader2, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../services/api";
 
-/* ===================================================== */
 /* FORMATADORES (MÁSCARAS) */
-/* ===================================================== */
-
 const formatCPF = (value: string) => {
   return value
     .replace(/\D/g, "")
@@ -59,10 +56,7 @@ const formatMoeda = (value: string) => {
   return `R$ ${v}`;
 };
 
-/* ===================================================== */
 /* TYPES - TIPAGENS */
-/* ===================================================== */
-
 interface Disciplina {
   disciplina: string;
   cargaHoraria: string;
@@ -120,10 +114,7 @@ interface FuncionarioFormData {
   referencias?: FileList;
 }
 
-/* ===================================================== */
 /* COMPONENT */
-/* ===================================================== */
-
 export default function NovoFuncionario() {
   const navigate = useNavigate();
   const [salvando, setSalvando] = useState(false);
@@ -257,9 +248,18 @@ export default function NovoFuncionario() {
       <div className="flex-1">
         <Header />
         <main className="p-4 md:p-8 max-w-[1600px] mx-auto">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-slate-800 dark:text-white">Novo Funcionário</h1>
-            <p className="text-slate-500 dark:text-slate-300">Cadastro completo de funcionário</p>
+          <div className="mb-8 flex items-center gap-4">
+            <button
+              title="Voltar"
+              onClick={() => navigate(-1)}
+              className="p-2 rounded-full text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-800 transition"
+            >
+              <ArrowLeft size={24} />
+            </button>
+            <div>
+              <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Novo Funcionário</h1>
+              <p className="text-slate-600 dark:text-slate-400 mt-1">Cadastro completo de funcionário</p>
+            </div>
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
@@ -400,10 +400,7 @@ export default function NovoFuncionario() {
   );
 }
 
-/* ===================================================== */
 /* COMPONENTES AUXILIARES */
-/* ===================================================== */
-
 interface SectionProps {
   title: string;
   children: ReactNode;

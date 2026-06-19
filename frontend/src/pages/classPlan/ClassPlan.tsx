@@ -1,6 +1,4 @@
 import { useAuth } from "../../contexts/AuthContext";
-
-// Importações atualizadas apontando para as novas subpastas
 import AdminClassPlan from "./admin/AdminClassPlan";
 import SecretaryClassPlan from "./secretary/SecretaryClassPlan";
 import CoordinatorClassPlan from "./coordinator/CoordinatorClassPlan";

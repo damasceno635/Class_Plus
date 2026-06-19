@@ -1,7 +1,6 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 
 // Importação do hook de autenticação para controle de acesso
-
 import { useAuth } from "../contexts/AuthContext";
 import type { Cargo } from "../contexts/AuthContext";
 
@@ -51,7 +50,7 @@ import Notifications from "../pages/notification/Notifications";
 // Interface atualizada para aceitar controle de cargos
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  allowedRoles?: Cargo[]; // Opcional: se não enviar, qualquer usuário logado pode acessar
+  allowedRoles?: Cargo[]; // Se não enviar, qualquer usuário logado pode acessar
 }
 
 
@@ -87,7 +86,6 @@ export default function AppRoutes() {
       {/* Rotas Protegidas Gerais (Acessíveis por qualquer nível logado) */}
       <Route path="/dashboard" element={ <ProtectedRoute> <Dashboard /> </ProtectedRoute> } />
       
-      {/* Rotas de Alunos (Acessíveis por Admin e Secretaria) */}
       <Route path="/alunos" element={ <ProtectedRoute allowedRoles={["admin", "secretary", "coordinator"]}> <Students /> </ProtectedRoute> } />
       <Route path="/alunos/novo" element={ <ProtectedRoute allowedRoles={["admin", "secretary"]}> <StudentsNew /> </ProtectedRoute> } />
       <Route path="/alunos/editar/:id" element={ <ProtectedRoute allowedRoles={["admin", "secretary"]}> <StudentsEdit /> </ProtectedRoute> } />

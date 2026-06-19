@@ -1,7 +1,8 @@
-import 'dotenv/config'; // DEVE SER A PRIMEIRA LINHA DO ARQUIVO!
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import routes from './routes';
+import { iniciarCronJobs } from './cron/faturasAutomaticas';
 
 const app = express();
 const PORT = 3333;
@@ -13,9 +14,9 @@ import path from 'path';
 
 app.use(express.json());
 app.use('/uploads', express.static(path.resolve(__dirname, '..', 'uploads')));
-
-// Avisamos o app para usar as rotas que criamos
 app.use(routes);
+
+iniciarCronJobs();
 
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT} 🚀`);

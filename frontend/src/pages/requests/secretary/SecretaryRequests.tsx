@@ -7,8 +7,6 @@ import Sidebar from "../../../components/layout/Sidebar";
 import Header from "../../../components/layout/Header";
 import Footer from "../../../components/layout/Footer";
 import { api } from "../../../services/api";
-
-// @ts-ignore
 import html2pdf from "html2pdf.js";
 
 type StatusRequisicao = "Pendente" | "Em Análise" | "Concluído" | "Negado";
@@ -89,7 +87,7 @@ export default function SecretaryRequests() {
     if (!selectedReq) return;
     setGerandoPdf(true);
 
-    const htmlContent = `...`; // mantém o mesmo HTML
+    const htmlContent = `...`; 
 
     const container = document.createElement('div');
     container.innerHTML = htmlContent;
@@ -212,7 +210,11 @@ export default function SecretaryRequests() {
                           </span>
                         </td>
                         <td className="px-6 py-4 text-center">
-                          <button onClick={() => abrirModal(req)} className={`action-btn inline-flex items-center justify-center ${req.status === 'Pendente' || req.status === 'Em Análise' ? 'bg-amber-500 hover:bg-amber-600' : 'bg-slate-600 hover:bg-slate-700'}`}>
+                          <button onClick={() => abrirModal(req)} className={`p-2 rounded-xl transition-all duration-200 ${
+                            req.status === 'Pendente' || req.status === 'Em Análise' 
+                              ? "bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-900/50" 
+                              : "bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
+                            }`}>
                             <Eye size={16} />
                           </button>
                         </td>

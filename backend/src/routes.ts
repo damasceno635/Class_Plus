@@ -3,7 +3,6 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import multer from 'multer';
 import { Prisma } from '@prisma/client';
-
 import prisma from './lib/prisma';
 import { authMiddleware, AuthRequest } from './middlewares/authMiddleware';
 import { multerConfig } from './config/multer';
@@ -31,9 +30,7 @@ type FuncionarioCompleto = Prisma.FuncionarioGetPayload<{
   };
 }>;
 
-// =========================
 // 1. REGISTRO
-// =========================
 routes.post('/registro', async (req, res: Response) => {
   const { nome, email, senha, cargo } = req.body;
 
@@ -60,9 +57,7 @@ routes.post('/registro', async (req, res: Response) => {
   }
 });
 
-// =========================
 // 2. LOGIN
-// =========================
 routes.post('/login', async (req, res: Response) => {
   const { email, senha } = req.body;
 
@@ -92,12 +87,10 @@ routes.post('/login', async (req, res: Response) => {
   }
 });
 
-// =========================
 // 3. PERFIL
-// =========================
 routes.get('/perfil', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    // Fazemos um "include" para trazer a ficha de aluno ou funcionário ligada a este login
+    // Trazer a ficha de aluno ou funcionário ligada a este login
     const user = await prisma.user.findUnique({
       where: { id: req.userId },
       include: {
@@ -110,7 +103,7 @@ routes.get('/perfil', authMiddleware, async (req: AuthRequest, res) => {
       return res.status(404).json({ error: 'Usuário não encontrado.' });
     }
 
-    // MÁGICA: Prioriza a foto do Perfil. Se não tiver, puxa a foto do cadastro original!
+    // Prioriza a foto do Perfil. Se não tiver, puxa a foto do cadastro original
     let fotoFinal = user.fotoUrl;
     if (!fotoFinal && user.aluno?.fotoUrl) fotoFinal = user.aluno.fotoUrl;
     if (!fotoFinal && user.funcionario?.fotoUrl) fotoFinal = user.funcionario.fotoUrl;
@@ -161,7 +154,7 @@ routes.get('/dashboard/secretary', authMiddleware, async (req, res) => {
   try {
     const hoje = new Date().toISOString().split("T")[0];
 
-    // Atualiza faturas atrasadas (Inteligência automática)
+    // Atualiza faturas atrasadas
     await prisma.fatura.updateMany({
       where: { status: 'Pendente', vencimento: { lt: hoje } },
       data: { status: 'Atrasado' }
@@ -208,7 +201,6 @@ routes.get('/dashboard/coordinator', authMiddleware, async (req, res) => {
     });
     const mediaGeral = notas.length > 0 ? (soma / notas.length).toFixed(1) : "0.0";
     
-    // Eventos de hoje
     const eventosHoje = await prisma.evento.count({ where: { data: hoje } }).catch(() => 0);
 
     return res.json({ roteirosPendentes, mediaGeral, eventosHoje });
@@ -218,7 +210,7 @@ routes.get('/dashboard/coordinator', authMiddleware, async (req, res) => {
 });
 
 // 4. Dashboard do Professor
-routes.get('/dashboard/teacher', authMiddleware, async (req, res) => {
+routes.get('/dashboard/teacher', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const hoje = new Date().toISOString().split("T")[0];
     const func = await prisma.funcionario.findUnique({ where: { userId: req.userId } });
@@ -226,7 +218,7 @@ routes.get('/dashboard/teacher', authMiddleware, async (req, res) => {
     // Turmas em que dá aula
     const turmas = func ? await prisma.alocacao.count({ where: { funcionarioId: func.id } }) : 0;
     
-    // Roteiros em rascunho ou rejeitados (que precisam de atenção)
+    // Roteiros em rascunho ou rejeitados
     const roteirosAcao = await prisma.roteiro.count({ 
       where: { userId: req.userId, status: { in: ['Rascunho', 'Rejeitado'] } } 
     });
@@ -240,7 +232,7 @@ routes.get('/dashboard/teacher', authMiddleware, async (req, res) => {
 });
 
 // 5. Dashboard do Aluno
-routes.get('/dashboard/student', authMiddleware, async (req, res) => {
+routes.get('/dashboard/student', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const aluno = await prisma.aluno.findUnique({ where: { userId: req.userId } });
     if (!aluno) return res.status(404).json({ error: "Aluno não encontrado" });
@@ -275,9 +267,7 @@ routes.get('/dashboard/student', authMiddleware, async (req, res) => {
   }
 });
 
-// =========================
 // 4. CADASTRAR ALUNO
-// =========================
 routes.post('/alunos', authMiddleware, upload.any(), async (req: AuthRequest, res: Response) => {
   try {
     const {
@@ -354,37 +344,51 @@ routes.post('/alunos', authMiddleware, upload.any(), async (req: AuthRequest, re
   }
 });
 
-// =========================
 // 5. LISTAR ALUNOS
-// =========================
-routes.get('/alunos', authMiddleware, async (_req, res: Response) => {
+routes.get('/alunos', authMiddleware, async (req, res) => {
   try {
-    const alunos = await prisma.aluno.findMany({
-      include: { user: true },
-      orderBy: { criadoEm: 'desc' }
-    });
+    // Apanha a página atual e o limite da URL (Por padrão: página 1, limite de 10 itens)
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const skip = (page - 1) * limit;
 
-    const alunosFormatados = alunos.map((aluno) => ({
-      id: aluno.id,
-      matricula: aluno.matricula,
-      nome: aluno.user.nome,
-      status: aluno.status,
-      nivel: aluno.nivelEnsino,
-      ano: aluno.anoTurma,
-      serie: aluno.serieTurma,
-      anoLetivo: aluno.anoLetivo
+    // Faz duas buscas em simultâneo: Pega os alunos daquela página e conta o total geral
+    const [alunosBrutos, totalAlunos] = await Promise.all([
+      prisma.aluno.findMany({
+        skip,
+        take: limit,
+        include: { user: true },
+        orderBy: { user: { nome: 'asc' } } 
+      }),
+      prisma.aluno.count() 
+    ]);
+
+    // Formata os dados para o frontend
+    const formatados = alunosBrutos.map(a => ({
+      id: a.id,
+      matricula: a.matricula,
+      nome: a.user.nome,
+      status: a.status,
+      nivel: a.nivelEnsino,
+      ano: a.anoTurma,
+      serie: a.serieTurma,
+      anoLetivo: "2026"
     }));
 
-    return res.json(alunosFormatados);
+    return res.json({
+      data: formatados,
+      meta: {
+        total: totalAlunos,
+        paginaAtual: page,
+        totalPaginas: Math.ceil(totalAlunos / limit),
+      }
+    });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: 'Erro ao buscar alunos.' });
+    return res.status(500).json({ error: "Erro ao buscar alunos." });
   }
 });
 
-// =========================
 // 6. BUSCAR ALUNO POR ID
-// =========================
 routes.get('/alunos/:id', authMiddleware, async (req, res: Response) => {
   try {
     const id = String(req.params.id);
@@ -439,9 +443,7 @@ routes.get('/alunos/:id', authMiddleware, async (req, res: Response) => {
   }
 });
 
-// =========================
 // 7. EDITAR ALUNO
-// =========================
 routes.put('/alunos/:id', authMiddleware, upload.any(), async (req: AuthRequest, res: Response) => {
   try {
     const id = String(req.params.id);
@@ -513,9 +515,7 @@ routes.put('/alunos/:id', authMiddleware, upload.any(), async (req: AuthRequest,
   }
 });
 
-// =========================
 // 8. EXCLUIR ALUNO
-// =========================
 routes.delete('/alunos/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const id = String(req.params.id);
@@ -532,10 +532,7 @@ routes.delete('/alunos/:id', authMiddleware, async (req: AuthRequest, res: Respo
   }
 });
 
-// ==========================================
 // ROTAS DE FUNCIONÁRIOS
-// ==========================================
-
 // Cadastrar funcionário
 routes.post('/funcionarios', authMiddleware, upload.any(), async (req: AuthRequest, res) => {
   try {
@@ -626,30 +623,46 @@ routes.post('/funcionarios', authMiddleware, upload.any(), async (req: AuthReque
   }
 });
 
-// Listar funcionários (resumido)
+// Listar funcionários
 routes.get('/funcionarios', authMiddleware, async (req, res) => {
   try {
-    const funcionarios = await prisma.funcionario.findMany({
-      include: { user: true },
-      orderBy: { criadoEm: 'desc' }
-    });
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const skip = (page - 1) * limit;
 
-    const formatados = funcionarios.map(f => ({
+    const [funcionariosBrutos, totalFuncionarios] = await Promise.all([
+      prisma.funcionario.findMany({
+        skip,
+        take: limit,
+        include: { user: true },
+        orderBy: { user: { nome: 'asc' } } 
+      }),
+      prisma.funcionario.count() 
+    ]);
+
+    const formatados = funcionariosBrutos.map(f => ({
       id: f.id,
+      ra: f.ra,
       nome: f.user.nome,
       cargo: f.vaga,
       contrato: f.contrato,
       status: f.status
     }));
 
-    return res.json(formatados);
+    return res.json({
+      data: formatados,
+      meta: {
+        total: totalFuncionarios,
+        paginaAtual: page,
+        totalPaginas: Math.ceil(totalFuncionarios / limit),
+      }
+    });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: 'Erro ao buscar funcionários.' });
+    return res.status(500).json({ error: "Erro ao buscar funcionários." });
   }
 });
 
-// Buscar funcionário por ID (completo)
+// Buscar funcionário por ID
 routes.get('/funcionarios/:id', authMiddleware, async (req, res) => {
   try {
     const id = String(req.params.id);
@@ -827,7 +840,7 @@ routes.delete('/funcionarios/:id', authMiddleware, async (req, res) => {
   }
 });
 
-// Rota de perfil (com foto)
+// Rota de perfil
 routes.get('/perfil', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const user = await prisma.user.findUnique({ where: { id: req.userId } });
@@ -845,7 +858,7 @@ routes.get('/perfil', authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
-// Atualizar perfil (com foto)
+// Atualizar perfil
 routes.put('/perfil', authMiddleware, upload.single('foto'), async (req: AuthRequest, res) => {
   try {
     const { nome, email, novaSenha } = req.body;
@@ -875,15 +888,26 @@ routes.put('/perfil', authMiddleware, upload.single('foto'), async (req: AuthReq
   }
 });
 
-// ==========================================
 // ROTAS DE EVENTOS
-// ==========================================
 routes.post('/eventos', authMiddleware, async (req, res) => {
   try {
     const { titulo, descricao, data, tipo, horarioInicio, horarioFim } = req.body;
+    
     const novoEvento = await prisma.evento.create({
       data: { titulo, descricao, data, tipo, horarioInicio, horarioFim }
     });
+
+    const todosUsuarios = await prisma.user.findMany();
+    
+    if (todosUsuarios.length > 0) {
+      const notificacoes = todosUsuarios.map(usuario => ({
+        userId: usuario.id,
+        titulo: "Novo Evento no Calendário 📅",
+        mensagem: `O evento "${titulo}" foi agendado para o dia ${data.split('-').reverse().join('/')}.`
+      }));
+      await prisma.notificacao.createMany({ data: notificacoes });
+    }
+
     return res.status(201).json(novoEvento);
   } catch (error) {
     console.error(error);
@@ -996,6 +1020,9 @@ routes.put('/roteiros/:id', authMiddleware, async (req: AuthRequest, res) => {
     const id = String(req.params.id);
     const { titulo, disciplina, turma, dataAplicacao, status, conteudo, metodologia, feedbackCoordenador } = req.body;
 
+    // Buscar o roteiro antigo primeiro para saber se o status mudou
+    const roteiroAntigo = await prisma.roteiro.findUnique({ where: { id } });
+
     const data: any = {};
     if (titulo !== undefined) data.titulo = titulo;
     if (disciplina !== undefined) data.disciplina = disciplina;
@@ -1006,20 +1033,42 @@ routes.put('/roteiros/:id', authMiddleware, async (req: AuthRequest, res) => {
     if (metodologia !== undefined) data.metodologia = metodologia;
     if (feedbackCoordenador !== undefined) data.feedbackCoordenador = feedbackCoordenador;
 
-    const roteiro = await prisma.roteiro.update({
+    const roteiroAtualizado = await prisma.roteiro.update({
       where: { id },
       data
     });
-    return res.json(roteiro);
+
+    if (status && roteiroAntigo && status !== roteiroAntigo.status) {
+      const iconeStatus = status === 'Aprovado' ? "✅" : status === 'Rejeitado' ? "❌" : "⚠️";
+      
+      await prisma.notificacao.create({
+        data: {
+          userId: roteiroAtualizado.userId, 
+          titulo: `Roteiro ${status} ${iconeStatus}`,
+          mensagem: `O seu roteiro de ${roteiroAtualizado.disciplina} ("${roteiroAtualizado.titulo}") foi marcado como ${status}.`
+        }
+      });
+    }
+
+    return res.json(roteiroAtualizado);
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: "Erro ao atualizar roteiro." });
   }
 });
 
-// ROTAS DE DIÁRIO DE CLASSE E NOTAS
-// ==========================================
+routes.delete('/roteiros/:id', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params as { id: string };
+    await prisma.roteiro.delete({ where: { id } });
+    
+    return res.json({ mensagem: "Roteiro excluído com sucesso!" });
+  } catch (error) {
+    return res.status(500).json({ error: "Erro ao excluir roteiro." });
+  }
+});
 
+// ROTAS DE DIÁRIO DE CLASSE E NOTAS
 // 1. Buscar Turmas onde o Professor Logado dá aula
 routes.get('/diario/turmas', authMiddleware, async (req: AuthRequest, res) => {
   try {
@@ -1072,7 +1121,7 @@ routes.post('/diario/frequencia', authMiddleware, async (req, res) => {
   try {
     const { alocacaoId, data, frequencias } = req.body;
     for (const f of frequencias) {
-      await prisma.frequencia.upsert({ // A Mágica! Cria se não existir, atualiza se existir
+      await prisma.frequencia.upsert({ 
         where: { alunoId_alocacaoId_data: { alunoId: f.alunoId, alocacaoId, data } },
         update: { presente: f.presente, observacao: f.observacao },
         create: { alunoId: f.alunoId, alocacaoId, data, presente: f.presente, observacao: f.observacao }
@@ -1092,214 +1141,304 @@ routes.get('/diario/notas', authMiddleware, async (req, res) => {
   } catch(err) { res.status(500).json({ error: "Erro ao buscar notas." }); }
 });
 
+// ROTAS DE SALVAR DO PROFESSOR
+// 1. Salvar Notas
 routes.post('/diario/notas', authMiddleware, async (req, res) => {
   try {
     const { alocacaoId, bimestre, notas } = req.body;
-    for (const n of notas) {
-      await prisma.nota.upsert({
-        where: { alunoId_alocacaoId_bimestre: { alunoId: n.alunoId, alocacaoId, bimestre } },
-        update: { n1: n.n1, n2: n.n2, n3: n.n3, n4: n.n4 },
-        create: { alunoId: n.alunoId, alocacaoId, bimestre, n1: n.n1, n2: n.n2, n3: n.n3, n4: n.n4 }
-      });
+
+    await prisma.nota.deleteMany({
+      where: { alocacaoId: alocacaoId, bimestre: bimestre }
+    });
+
+    const novasNotas = notas.map((n: any) => ({
+      alunoId: n.alunoId,
+      alocacaoId: alocacaoId,
+      bimestre: bimestre,
+      n1: n.n1,
+      n2: n.n2,
+      n3: n.n3,
+      n4: n.n4 || ""
+    }));
+
+    await prisma.nota.createMany({ data: novasNotas });
+
+    const alunosIds = [...new Set(notas.map((n: any) => n.alunoId))];
+    const alunosAfetados = await prisma.aluno.findMany({
+      where: { id: { in: alunosIds as string[] } },
+      include: { user: true }
+    });
+
+    if (alunosAfetados.length > 0) {
+      const notificacoes = alunosAfetados.map(aluno => ({
+        userId: aluno.user.id,
+        titulo: "Notas Lançadas",
+        mensagem: `As suas notas do ${bimestre} foram atualizadas no boletim.`
+      }));
+      await prisma.notificacao.createMany({ data: notificacoes });
     }
-    return res.json({ message: "Notas salvas!" });
-  } catch(err) { res.status(500).json({ error: "Erro ao salvar notas" }); }
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Erro ao salvar notas no banco." });
+  }
 });
 
-// ROTAS DE MÉTRICAS E DASHBOARDS (ALUNOS E ADMIN)
-// ==========================================
+// 2. Salvar Frequência
+routes.post('/diario/frequencia', authMiddleware, async (req, res) => {
+  try {
+    const { alocacaoId, data, frequencias } = req.body;
 
-// 1. Métricas Globais para o Admin
+    await prisma.frequencia.deleteMany({
+      where: {
+        alocacaoId: alocacaoId, 
+        data: data
+      }
+    });
+
+    const novasFrequencias = frequencias.map((f: any) => ({
+      alunoId: f.alunoId,
+      alocacaoId: alocacaoId,
+      data: data,
+      presente: f.presente,
+      observacao: f.observacao || ""
+    }));
+
+    await prisma.frequencia.createMany({ data: novasFrequencias });
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Erro ao salvar frequências." });
+  }
+});
+
+// ROTAS DE MÉTRICAS E DASHBOARDS
+// 1. ROTAS DE PERFORMANCE (Admin e Coordenador)
+const gerarMetricasGlobais = async () => {
+  // Busca todos os alunos ativos e as suas notas
+  const alunosMatriculados = await prisma.aluno.findMany({
+    where: { status: { not: 'Inativo' } },
+    include: { notas: true }
+  });
+
+  // Calcula a evasão (Inativos vs Total)
+  const inativos = await prisma.aluno.count({ where: { status: 'Inativo' } });
+  const totalGeral = alunosMatriculados.length + inativos;
+  const evasao = totalGeral > 0 ? ((inativos / totalGeral) * 100).toFixed(1) : "0.0";
+
+  let somaMediaGlobal = 0;
+  let alunosComNota = 0;
+
+  // Agrupador por Nível de Ensino
+  const niveisMap = new Map();
+
+  alunosMatriculados.forEach(aluno => {
+    // Calcula a Média do Aluno
+    let somaAluno = 0;
+    aluno.notas.forEach(nota => {
+      const vals = [nota.n1, nota.n2, nota.n3, nota.n4].map(v => parseFloat(v?.replace(',', '.') || '0'));
+      somaAluno += vals.reduce((a, b) => a + b, 0) / 4;
+    });
+    const mediaDoAluno = aluno.notas.length > 0 ? (somaAluno / aluno.notas.length) : 0;
+
+    // Alimenta a Média Global da Escola
+    if (mediaDoAluno > 0) {
+      somaMediaGlobal += mediaDoAluno;
+      alunosComNota++;
+    }
+
+    // Separa o aluno pelo Nível de Ensino
+    const nivel = aluno.nivelEnsino || "Não Classificado";
+    if (!niveisMap.has(nivel)) {
+      niveisMap.set(nivel, { totalAlunos: 0, somaDasMedias: 0, aprovados: 0, alunosAvaliados: 0 });
+    }
+
+    const dadosNivel = niveisMap.get(nivel);
+    dadosNivel.totalAlunos += 1;
+    
+    if (mediaDoAluno > 0) {
+      dadosNivel.somaDasMedias += mediaDoAluno;
+      dadosNivel.alunosAvaliados += 1;
+      if (mediaDoAluno >= 6.0) dadosNivel.aprovados += 1;
+    }
+  });
+
+  const mediaGlobalFormatada = alunosComNota > 0 ? (somaMediaGlobal / alunosComNota).toFixed(1) : "0.0";
+
+  const segmentos = Array.from(niveisMap.entries()).map(([nome, dados]) => {
+    const mediaNivel = dados.alunosAvaliados > 0 ? (dados.somaDasMedias / dados.alunosAvaliados) : 0;
+    const taxaAprovacao = dados.alunosAvaliados > 0 ? Math.round((dados.aprovados / dados.alunosAvaliados) * 100) : 0;
+
+    return {
+      nome: nome,
+      totalAlunos: dados.totalAlunos,
+      mediaGeral: mediaNivel,
+      taxaAprovacao: taxaAprovacao
+    };
+  });
+
+  return {
+    global: { evasao, media: mediaGlobalFormatada, corte: "6.0" },
+    segmentos
+  };
+};
+
+// Rota do Admin
 routes.get('/metricas/admin', authMiddleware, async (req, res) => {
   try {
-    const alunos = await prisma.aluno.findMany();
-    const notas = await prisma.nota.findMany();
+    const dados = await gerarMetricasGlobais();
+    return res.json(dados);
+  } catch (error) {
+    return res.status(500).json({ error: "Erro ao gerar métricas." });
+  }
+});
 
-    const totalAlunos = alunos.length;
-    // Calcula a evasão (Inativos e Desistentes)
-    const inativos = alunos.filter(a => a.status === 'Inativo' || a.status === 'Desistente').length;
-    const taxaEvasao = totalAlunos > 0 ? ((inativos / totalAlunos) * 100).toFixed(1) : "0.0";
-
-    // Calcula a média geral de toda a escola
-    let somaGlobal = 0;
-    let countGlobal = 0;
-    notas.forEach(n => {
-      const vals = [n.n1, n.n2, n.n3, n.n4].map(v => parseFloat(v?.replace(',', '.') || '0'));
-      const media = vals.reduce((a, b) => a + b, 0) / 4;
-      somaGlobal += media;
-      countGlobal++;
-    });
-    const mediaInstituicao = countGlobal > 0 ? (somaGlobal / countGlobal).toFixed(1) : "0.0";
-
-    // Calcula o desempenho dividido por Níveis de Ensino
-    const niveis = ["Ensino Fundamental I", "Ensino Fundamental II", "Ensino Médio"];
-    const segmentos = niveis.map(nivel => {
-      const alunosNivel = alunos.filter(a => a.nivelEnsino === nivel || a.nivelEnsino.includes(nivel));
-      const totalNivel = alunosNivel.length;
-      
-      const notasNivel = notas.filter(n => alunosNivel.some(a => a.id === n.alunoId));
-      
-      let somaNivel = 0;
-      let aprovadas = 0;
-      notasNivel.forEach(n => {
-        const vals = [n.n1, n.n2, n.n3, n.n4].map(v => parseFloat(v?.replace(',', '.') || '0'));
-        const media = vals.reduce((a, b) => a + b, 0) / 4;
-        somaNivel += media;
-        if(media >= 6.0) aprovadas++; // Nota de corte: 6.0
-      });
-
-      const mediaGeralNivel = notasNivel.length > 0 ? (somaNivel / notasNivel.length) : 0;
-      const taxaAprovacao = notasNivel.length > 0 ? Math.round((aprovadas / notasNivel.length) * 100) : 0;
-
-      return {
-        nome: nivel,
-        mediaGeral: mediaGeralNivel,
-        taxaAprovacao,
-        totalAlunos: totalNivel
-      };
-    });
-
-    // Filtra segmentos que têm alunos para não mostrar blocos vazios
-    const segmentosAtivos = segmentos.filter(s => s.totalAlunos > 0);
-
-    return res.json({
-      global: { evasao: taxaEvasao, media: mediaInstituicao, corte: "6.0" },
-      segmentos: segmentosAtivos.length > 0 ? segmentosAtivos : [
-        { nome: "Nenhum aluno cadastrado com notas", mediaGeral: 0, taxaAprovacao: 0, totalAlunos: 0 }
-      ]
-    });
-
-  } catch(err) {
-    return res.status(500).json({ error: "Erro ao gerar métricas institucionais." });
+// Rota do Coordenador
+routes.get('/metricas/coordinator', authMiddleware, async (req, res) => {
+  try {
+    const dados = await gerarMetricasGlobais();
+    return res.json(dados);
+  } catch (error) {
+    return res.status(500).json({ error: "Erro ao gerar métricas." });
   }
 });
 
 // 2. Métricas Individuais do Aluno
-routes.get('/metricas/aluno', authMiddleware, async (req, res) => {
+routes.get('/metricas/aluno', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    // Busca o aluno logado
-    const aluno = await prisma.aluno.findUnique({ where: { userId: req.userId } });
-    if(!aluno) return res.status(404).json({ error: "Aluno não encontrado" });
-
-    const turmaStr = `${aluno.anoTurma} ${aluno.serieTurma}`;
-    const totalAlunosTurma = await prisma.aluno.count({ 
-      where: { anoTurma: aluno.anoTurma, serieTurma: aluno.serieTurma, status: "Matriculado" }
+    // Descobre quem é o aluno logado e a sua turma
+    const alunoLogado = await prisma.aluno.findUnique({ 
+      where: { userId: req.userId },
+      include: { user: true }
     });
 
-    const notas = await prisma.nota.findMany({ where: { alunoId: aluno.id }, include: { alocacao: true }});
-    const frequencias = await prisma.frequencia.findMany({ where: { alunoId: aluno.id }, include: { alocacao: true }});
+    if (!alunoLogado) {
+      return res.status(404).json({ error: "Aluno não encontrado" });
+    }
 
-    const disciplinasMap: any = {};
-
-    // Agrupa as presenças
-    frequencias.forEach(f => {
-      const disc = f.alocacao.disciplina;
-      if(!disciplinasMap[disc]) disciplinasMap[disc] = { id: f.alocacao.id, nome: disc, faltas: 0, aulasDadas: 0, media: 0 };
-      disciplinasMap[disc].aulasDadas++;
-      if(!f.presente) disciplinasMap[disc].faltas++;
-    });
-
-    // Agrupa as Notas
-    let somaGeral = 0;
-    let countGeral = 0;
-    notas.forEach(n => {
-      const disc = n.alocacao.disciplina;
-      if(!disciplinasMap[disc]) disciplinasMap[disc] = { id: n.alocacao.id, nome: disc, faltas: 0, aulasDadas: 0, media: 0 };
-      const vals = [n.n1, n.n2, n.n3, n.n4].map(v => parseFloat(v?.replace(',', '.') || '0'));
-      const media = vals.reduce((a, b) => a + b, 0) / 4;
-      disciplinasMap[disc].media = media;
-      
-      somaGeral += media;
-      countGeral++;
-    });
-
-    const subjects = Object.values(disciplinasMap);
-    const mediaGeral = countGeral > 0 ? (somaGeral / countGeral) : 0;
-
-    let totalAulas = 0;
-    let totalFaltas = 0;
-    subjects.forEach((s: any) => { totalAulas += s.aulasDadas; totalFaltas += s.faltas; });
-    const frequenciaGeral = totalAulas > 0 ? Math.round(((totalAulas - totalFaltas) / totalAulas) * 100) : 100;
-
-    return res.json({
-      stats: {
-        turma: turmaStr,
-        totalAlunos: totalAlunosTurma,
-        posicaoRanking: 1, // Fixado como top 1 por simplicidade de cálculo
-        mediaGeral,
-        frequenciaGeral
+    // Busca TODOS os alunos que estão na exata mesma turma
+    const colegas = await prisma.aluno.findMany({
+      where: {
+        anoTurma: alunoLogado.anoTurma,
+        serieTurma: alunoLogado.serieTurma
       },
-      subjects
+      include: {
+        user: true,
+        notas: true 
+      }
     });
 
-  } catch(err) {
-    return res.status(500).json({ error: "Erro ao gerar métricas do aluno" });
-  }
-});
-
-// 3. Métricas Globais para o Coordenador
-routes.get('/metricas/coordinator', authMiddleware, async (req, res) => {
-  try {
-    const alunos = await prisma.aluno.findMany();
-    const notas = await prisma.nota.findMany();
-
-    const totalAlunos = alunos.length;
-    
-    // Calcula a evasão (Inativos e Desistentes)
-    const inativos = alunos.filter(a => a.status === 'Inativo' || a.status === 'Desistente').length;
-    const taxaEvasao = totalAlunos > 0 ? ((inativos / totalAlunos) * 100).toFixed(1) : "0.0";
-
-    // Calcula a média geral de toda a escola
-    let somaGlobal = 0;
-    let countGlobal = 0;
-    notas.forEach(n => {
-      const vals = [n.n1, n.n2, n.n3, n.n4].map(v => parseFloat(v?.replace(',', '.') || '0'));
-      const media = vals.reduce((a, b) => a + b, 0) / 4;
-      somaGlobal += media;
-      countGlobal++;
-    });
-    const mediaInstituicao = countGlobal > 0 ? (somaGlobal / countGlobal).toFixed(1) : "0.0";
-
-    // Calcula o desempenho dividido por Níveis de Ensino
-    const niveis = ["Ensino Fundamental I", "Ensino Fundamental II", "Ensino Médio"];
-    const segmentos = niveis.map(nivel => {
-      const alunosNivel = alunos.filter(a => a.nivelEnsino === nivel || a.nivelEnsino.includes(nivel));
-      const totalNivel = alunosNivel.length;
-      
-      const notasNivel = notas.filter(n => alunosNivel.some(a => a.id === n.alunoId));
-      
-      let somaNivel = 0;
-      let aprovadas = 0;
-      notasNivel.forEach(n => {
-        const vals = [n.n1, n.n2, n.n3, n.n4].map(v => parseFloat(v?.replace(',', '.') || '0'));
-        const media = vals.reduce((a, b) => a + b, 0) / 4;
-        somaNivel += media;
-        if(media >= 6.0) aprovadas++; // Nota de corte estipulada: 6.0
+    // Calcula a média matemática (PARCIAL) de todos os alunos da sala para o Ranking
+    const rankingDaTurma = colegas.map(colega => {
+      let soma = 0;
+      colega.notas.forEach(nota => {
+        // Divide por 3: Prova, Atividades, Participação
+        const valores = [nota.n1, nota.n2, nota.n3].map(v => parseFloat(v?.replace(',', '.') || '0'));
+        soma += valores.reduce((a, b) => a + b, 0) / 3;
       });
+      const mediaParcialDoColega = colega.notas.length > 0 ? (soma / colega.notas.length) : 0;
+      return { id: colega.id, nome: colega.user.nome, media: mediaParcialDoColega };
+    });
 
-      const mediaGeralNivel = notasNivel.length > 0 ? (somaNivel / notasNivel.length) : 0;
-      const taxaAprovacao = notasNivel.length > 0 ? Math.round((aprovadas / notasNivel.length) * 100) : 0;
+    const top3Dinâmico = rankingDaTurma.sort((a, b) => b.media - a.media).slice(0, 3);
+    const posicaoRanking = rankingDaTurma.findIndex(a => a.id === alunoLogado.id) + 1;
+    const mediaDoAluno = rankingDaTurma.find(a => a.id === alunoLogado.id)?.media || 0;
+
+    // BUSCA AS DISCIPLINAS REAIS DO ALUNO E ORGANIZA POR BIMESTRE
+    const notasDoAluno = await prisma.nota.findMany({
+      where: { alunoId: alunoLogado.id },
+      include: { alocacao: true }
+    });
+
+    const frequenciasDoAluno = await prisma.frequencia.findMany({
+      where: { alunoId: alunoLogado.id }
+    });
+
+    const totalAulasGeral = frequenciasDoAluno.length;
+    const presencasGeral = frequenciasDoAluno.filter(f => f.presente).length;
+    const frequenciaGeralVerdadeira = totalAulasGeral > 0 ? Math.round((presencasGeral / totalAulasGeral) * 100) : 100;
+
+    const mapaDisciplinas = new Map();
+
+    notasDoAluno.forEach(nota => {
+      // Cálculo do Bimestre específico (Dividido pelas 3 avaliações)
+      const n1 = parseFloat(nota.n1?.replace(',', '.') || '0');
+      const n2 = parseFloat(nota.n2?.replace(',', '.') || '0');
+      const n3 = parseFloat(nota.n3?.replace(',', '.') || '0');
+      const mediaDoBimestre = (n1 + n2 + n3) / 3;
+      
+      const nomeDisciplinaReal = nota.alocacao?.disciplina || (nota as any).disciplina || 'Disciplina Avulsa';
+      const identificadorUnico = nota.alocacaoId || nomeDisciplinaReal;
+
+      if (!mapaDisciplinas.has(identificadorUnico)) {
+        mapaDisciplinas.set(identificadorUnico, {
+          id: identificadorUnico,
+          nome: nomeDisciplinaReal,
+          alocacaoId: nota.alocacaoId,
+          bimestres: {
+            "1º Bimestre": null,
+            "2º Bimestre": null,
+            "3º Bimestre": null,
+            "4º Bimestre": null,
+          }
+        });
+      }
+
+      const disciplina = mapaDisciplinas.get(identificadorUnico);
+      const bimestreChave = (nota as any).bimestre || "1º Bimestre"; 
+      
+      if (disciplina.bimestres[bimestreChave] !== undefined) {
+        disciplina.bimestres[bimestreChave] = { n1, n2, n3, media: mediaDoBimestre };
+      }
+    });
+    
+    // FECHA AS MÉDIAS ANUAIS E CONTA AS FALTAS
+    const subjects = Array.from(mapaDisciplinas.values()).map(sub => {
+      const chamadasDestaMateria = sub.alocacaoId ? frequenciasDoAluno.filter(f => f.alocacaoId === sub.alocacaoId) : [];
+      const totalAulasDadas = chamadasDestaMateria.length > 0 ? chamadasDestaMateria.length : 40; 
+      
+      // Conta e extrai as datas exatas em que o aluno faltou
+      const faltasExatas = chamadasDestaMateria
+        .filter(f => f.presente === false)
+        .map(f => f.data); 
+        
+      const totalDeFaltas = faltasExatas.length; 
+
+      let somaAnual = 0;
+      for (let i = 1; i <= 4; i++) {
+        const b = sub.bimestres[`${i}º Bimestre`];
+        if (b) somaAnual += b.media;
+      }
+      
+      const mediaAnualFinal = somaAnual / 4; 
 
       return {
-        nome: nivel,
-        mediaGeral: mediaGeralNivel,
-        taxaAprovacao,
-        totalAlunos: totalNivel
+        id: sub.id,
+        nome: sub.nome,
+        aulasDadas: totalAulasDadas, 
+        faltas: totalDeFaltas,
+        faltasDatas: faltasExatas, 
+        bimestres: sub.bimestres,
+        mediaAnual: mediaAnualFinal 
       };
     });
 
-    // Filtra para mostrar apenas os segmentos que realmente têm alunos cadastrados
-    const segmentosAtivos = segmentos.filter(s => s.totalAlunos > 0);
-
     return res.json({
-      global: { evasao: taxaEvasao, media: mediaInstituicao, corte: "6.0" },
-      segmentos: segmentosAtivos.length > 0 ? segmentosAtivos : [
-        { nome: "Nenhum aluno cadastrado com notas", mediaGeral: 0, taxaAprovacao: 0, totalAlunos: 0 }
-      ]
+      stats: {
+        turma: `${alunoLogado.anoTurma} ${alunoLogado.serieTurma}`,
+        totalAlunos: colegas.length,
+        posicaoRanking: posicaoRanking,
+        mediaGeral: mediaDoAluno,
+        frequenciaGeral: frequenciaGeralVerdadeira,
+        top3: top3Dinâmico
+      },
+      subjects: subjects 
     });
-
-  } catch(err) {
-    return res.status(500).json({ error: "Erro ao gerar métricas da coordenação." });
+  } catch (error) {
+    console.error("Erro ao gerar métricas:", error);
+    return res.status(500).json({ error: "Erro ao carregar o painel do aluno." });
   }
 });
 
@@ -1311,15 +1450,25 @@ routes.post('/requisicoes', authMiddleware, upload.single('anexo'), async (req: 
     const arquivoAnexo = req.file ? req.file.filename : null;
 
     // Acha a ficha de aluno atrelada ao usuário logado
-    const aluno = await prisma.aluno.findUnique({ where: { userId: req.userId } });
+    const aluno = await prisma.aluno.findUnique({ where: { userId: req.userId }, include: { user: true } });
     if (!aluno) return res.status(403).json({ error: "Apenas alunos podem fazer requisições." });
 
-    // Gera um protocolo único (Ex: REQ-2026-4092)
+    // Gera um protocolo único
     const protocolo = `REQ-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
     const novaReq = await prisma.requisicao.create({
       data: { protocolo, tipo, descricao, arquivoAnexo, alunoId: aluno.id }
     });
+
+    const secretaria = await prisma.user.findMany({ where: { cargo: { in: ['secretary'] } } });
+    if (secretaria.length > 0) {
+      const notificacoes = secretaria.map(usuario => ({
+        userId: usuario.id,
+        titulo: "Nova Requisição Recebida",
+        mensagem: `Aluno(a) ${aluno.user.nome} abriu o protocolo ${protocolo} (${tipo})".`,
+      }));
+      await prisma.notificacao.createMany({ data: notificacoes });
+    }
 
     return res.status(201).json(novaReq);
   } catch (error) {
@@ -1345,6 +1494,7 @@ routes.get('/requisicoes', authMiddleware, async (req: AuthRequest, res) => {
       // Aluno vê só as dele
       requisicoes = await prisma.requisicao.findMany({
         where: { alunoId: user.aluno.id },
+        include: { aluno: { include: { user: true } } },
         orderBy: { criadoEm: 'desc' }
       });
     } else if (user?.cargo === 'secretary' || user?.cargo === 'admin') {
@@ -1381,7 +1531,6 @@ routes.put('/requisicoes/:realId', authMiddleware, upload.single('documento'), a
     const realId = String(req.params.realId);
     const { status, respostaSecretaria } = req.body;
     
-    // Pega o ficheiro que a secretária fez upload (se existir)
     const arquivo = req.file ? req.file.filename : undefined;
     
     const dadosAtualizacao: any = {};
@@ -1391,8 +1540,19 @@ routes.put('/requisicoes/:realId', authMiddleware, upload.single('documento'), a
 
     const atualizada = await prisma.requisicao.update({
       where: { id: realId },
-      data: dadosAtualizacao
+      data: dadosAtualizacao,
+      include: { aluno: { include: { user: true } } } // Traz o aluno para notificar
     });
+    
+    if (atualizada.aluno?.user?.id) {
+      await prisma.notificacao.create({
+        data: {
+          userId: atualizada.aluno.user.id,
+          titulo: "Atualização no seu Protocolo",
+          mensagem: `A sua solicitação ${atualizada.protocolo} mudou para o status: ${atualizada.status}.`
+        }
+      });
+    }
     
     return res.json(atualizada);
   } catch (error) {
@@ -1412,8 +1572,8 @@ routes.get('/financeiro/aluno', authMiddleware, async (req: AuthRequest, res) =>
       orderBy: { vencimento: 'desc' }
     });
 
-    // LÓGICA INTELIGENTE: Verifica se alguma fatura pendente já venceu hoje!
-    const hoje = new Date().toISOString().split("T")[0]; // "2026-06-12"
+    // Verifica se alguma fatura pendente já venceu hoje
+    const hoje = new Date().toISOString().split("T")[0];
     
     const faturasAtualizadas = await Promise.all(faturas.map(async (f) => {
       if (f.status === "Pendente" && f.vencimento < hoje) {
@@ -1433,7 +1593,7 @@ routes.get('/financeiro/aluno', authMiddleware, async (req: AuthRequest, res) =>
   }
 });
 
-// ROTA AUXILIAR (Para você criar faturas de teste no banco)
+// ROTA AUXILIAR (Para criar faturas de teste no banco)
 routes.post('/financeiro/admin/gerar', authMiddleware, async (req: AuthRequest, res) => {
   try {
     // Exemplo de Body JSON: { "alunoId": "ID_DO_ALUNO_AQUI", "referencia": "Taxa de Material", "vencimento": "2026-06-20", "valor": 350.00 }
@@ -1466,7 +1626,7 @@ routes.get('/financeiro/admin', authMiddleware, async (req, res) => {
     const totalCobrancasAtivas = faturas.filter(f => f.status !== 'Pago').length;
     const inadimplencia = totalCobrancasAtivas > 0 ? ((atrasados / totalCobrancasAtivas) * 100).toFixed(1) : "0.0";
 
-    const despesasPrevistas = 318500; // Fixo no exemplo (seria vindo de uma tabela de Despesas)
+    const despesasPrevistas = 318500;
     const saldoOperacional = receita - despesasPrevistas;
 
     // Formata as últimas transações pagas
@@ -1498,7 +1658,7 @@ routes.get('/financeiro/secretaria', authMiddleware, async (req, res) => {
   try {
     const hoje = new Date().toISOString().split("T")[0];
 
-    // Atualiza faturas atrasadas de todos os alunos antes de listar (Inteligência de Vencimento)
+    // Atualiza faturas atrasadas de todos os alunos antes de listar
     await prisma.fatura.updateMany({
       where: { status: 'Pendente', vencimento: { lt: hoje } },
       data: { status: 'Atrasado' }
@@ -1508,7 +1668,7 @@ routes.get('/financeiro/secretaria', authMiddleware, async (req, res) => {
     const alunos = await prisma.aluno.findMany({ 
       include: { 
         user: true, 
-        faturas: { orderBy: { vencimento: 'desc' }, take: 1 } // Pega só a fatura mais recente
+        faturas: { orderBy: { vencimento: 'desc' }, take: 1 } 
       } 
     });
 
@@ -1531,7 +1691,6 @@ routes.get('/financeiro/secretaria', authMiddleware, async (req, res) => {
         statusMensalidade: ultimaFatura ? ultimaFatura.status : "Em Dia",
         ultimaPaga: ultimaFatura ? ultimaFatura.referencia : "-",
         diasAtraso,
-        // Dados escondidos mas necessários para a geração do PDF e baixa
         faturaId: ultimaFatura ? ultimaFatura.id : null,
         valor: ultimaFatura ? ultimaFatura.valor : 0,
         vencimento: ultimaFatura ? ultimaFatura.vencimento : ""
@@ -1562,13 +1721,11 @@ routes.put('/financeiro/baixa/:faturaId', authMiddleware, async (req, res) => {
 // 1. Exportar dados (Backup Manual)
 routes.get('/backup/export', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    // Verifica se quem está a pedir é Admin
     const user = await prisma.user.findUnique({ where: { id: req.userId } });
     if (user?.cargo !== 'admin') {
       return res.status(403).json({ error: "Apenas administradores podem gerar backups." });
     }
 
-    // Extrai todas as tabelas principais
     const users = await prisma.user.findMany();
     const alunos = await prisma.aluno.findMany();
     const funcionarios = await prisma.funcionario.findMany();
@@ -1593,9 +1750,7 @@ routes.get('/backup/export', authMiddleware, async (req: AuthRequest, res) => {
 // 2. Restaurar dados (Simulação por segurança)
 routes.post('/backup/restore', authMiddleware, upload.single('arquivo'), async (req: AuthRequest, res) => {
   try {
-    // Num ambiente real, aqui você leria o JSON enviado (req.file) 
-    // e faria o processo inverso (prisma.createMany) limpando as tabelas primeiro.
-    // Como a restauração destrói dados, mantemos como uma resposta de sucesso simulada.
+    // Num ambiente real, aqui o JSON enviado (req.file) seria lido e faria o processo inverso (prisma.createMany) limpando as tabelas primeiro.
     
     setTimeout(() => {
       return res.json({ message: "Base de dados restaurada com sucesso!" });
@@ -1613,56 +1768,134 @@ routes.get('/relatorios/gerar', authMiddleware, async (req, res) => {
     let dados = {};
 
     switch (tipo) {
-      case 'rep-01': // Desempenho Académico
-        const notas = await prisma.nota.findMany();
-        let soma = 0; let aprovados = 0;
-        notas.forEach(n => {
-          const vals = [n.n1, n.n2, n.n3, n.n4].map(v => parseFloat(v?.replace(',', '.') || '0'));
-          const media = vals.reduce((a, b) => a + b, 0) / 4;
-          soma += media;
-          if (media >= 6.0) aprovados++;
+      case 'rep-01': // Desempenho Acadêmico (Percorre todos os alunos, notas reais e agrupa por turma)
+        const alunosMatriculados = await prisma.aluno.findMany({
+          where: { status: 'Matriculado' },
+          include: { notas: true }
         });
+
+        let somaGlobal = 0;
+        let alunosComNota = 0;
+        let alunosAprovados = 0;
+        const turmasMap = new Map();
+
+        alunosMatriculados.forEach(aluno => {
+          if (aluno.notas.length === 0) return; // Só conta alunos que já têm alguma nota
+
+          let somaBimestres = 0;
+          aluno.notas.forEach(nota => {
+            const n1 = parseFloat(nota.n1?.replace(',', '.') || '0');
+            const n2 = parseFloat(nota.n2?.replace(',', '.') || '0');
+            const n3 = parseFloat(nota.n3?.replace(',', '.') || '0');
+            somaBimestres += (n1 + n2 + n3) / 3;
+          });
+
+          // Média Final do Aluno (dividida pelo nº de matérias com notas lançadas)
+          const mediaAluno = somaBimestres / aluno.notas.length;
+          
+          somaGlobal += mediaAluno;
+          alunosComNota++;
+          if (mediaAluno >= 6.0) alunosAprovados++;
+
+          // Agrupa para Ranking de Turmas
+          const turmaChave = `${aluno.anoTurma} ${aluno.serieTurma}`;
+          if (!turmasMap.has(turmaChave)) turmasMap.set(turmaChave, { soma: 0, count: 0 });
+          turmasMap.get(turmaChave).soma += mediaAluno;
+          turmasMap.get(turmaChave).count += 1;
+        });
+
+        // Ordena as turmas da maior média para a menor
+        const rankingTurmas = Array.from(turmasMap.entries()).map(([turma, data]) => ({
+          turma, media: (data.soma / data.count).toFixed(2)
+        })).sort((a, b) => parseFloat(b.media) - parseFloat(a.media));
+
         dados = {
-          totalProvas: notas.length,
-          mediaGlobal: notas.length > 0 ? (soma / notas.length).toFixed(2) : "0.0",
-          taxaAprovacao: notas.length > 0 ? Math.round((aprovados / notas.length) * 100) : 0
+          totalAvaliados: alunosComNota,
+          mediaGlobal: alunosComNota > 0 ? (somaGlobal / alunosComNota).toFixed(2) : "0.00",
+          taxaAprovacao: alunosComNota > 0 ? Math.round((alunosAprovados / alunosComNota) * 100) : 0,
+          rankingTurmas
         };
         break;
 
-      case 'rep-03': // Inadimplência
+      case 'rep-03': // Inadimplência (Percorre faturas reais e calcula dias de atraso exatos)
         const faturasAtrasadas = await prisma.fatura.findMany({
           where: { status: 'Atrasado' },
-          include: { aluno: { include: { user: true } } }
+          include: { aluno: { include: { user: true } } },
+          orderBy: { vencimento: 'asc' } // Da mais antiga para a mais recente
         });
+        
         const totalAtrasado = faturasAtrasadas.reduce((acc, f) => acc + f.valor, 0);
-        dados = { totalAtrasado, faturas: faturasAtrasadas };
+        
+        const faturasFormatadas = faturasAtrasadas.map(f => {
+          const diffTime = Math.abs(new Date().getTime() - new Date(f.vencimento).getTime());
+          const diasAtraso = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          return {
+            nome: f.aluno.user.nome,
+            referencia: f.referencia,
+            valor: f.valor,
+            vencimento: f.vencimento,
+            diasAtraso
+          };
+        });
+
+        dados = { totalAtrasado, faturas: faturasFormatadas };
         break;
 
-      case 'rep-04': // DRE (Demonstração de Resultados)
+      case 'rep-04': // DRE Real (Soma as receitas e usa o salário dos funcionários como despesa)
         const todasFaturas = await prisma.fatura.findMany();
-        const receitas = todasFaturas.filter(f => f.status === 'Pago').reduce((acc, f) => acc + f.valor, 0);
-        const pendentes = todasFaturas.filter(f => f.status !== 'Pago').reduce((acc, f) => acc + f.valor, 0);
-        dados = { receitas, pendentes, despesasFixas: 318500, saldoCaixa: receitas - 318500 };
+        let receitas = 0; let pendentes = 0; let perdidas = 0;
+
+        todasFaturas.forEach(f => {
+          if (f.status === 'Pago') receitas += f.valor;
+          else if (f.status === 'Pendente') pendentes += f.valor;
+          else if (f.status === 'Atrasado') perdidas += f.valor;
+        });
+
+        const funcionarios = await prisma.funcionario.findMany();
+        const despesaSalarios = funcionarios.reduce((acc, func) => acc + (Number(func.salario) || 0), 0);
+        const despesasReais = despesaSalarios > 0 ? despesaSalarios : 0;
+
+        dados = { 
+          receitas, 
+          pendentes, 
+          atrasadas: perdidas,
+          despesasFixas: despesasReais,
+          saldoCaixa: receitas - despesasReais
+        };
         break;
 
-      case 'rep-05': // Log de Requisições
-        const reqs = await prisma.requisicao.findMany();
-        const concluidas = reqs.filter(r => r.status === 'Concluído').length;
-        const aguardando = reqs.filter(r => r.status !== 'Concluído').length;
-        dados = { total: reqs.length, concluidas, aguardando };
+      case 'rep-05': // Requisições (Traz os últimos chamados e totais reais)
+        const reqs = await prisma.requisicao.findMany({
+          include: { aluno: { include: { user: true } } },
+          orderBy: { criadoEm: 'desc' }
+        });
+        
+        const abertas = reqs.filter(r => r.status === 'Pendente' || r.status === 'Em Análise');
+        const concluidas = reqs.filter(r => r.status === 'Concluído');
+        const negadas = reqs.filter(r => r.status === 'Negado');
+
+        dados = { 
+          total: reqs.length, abertas: abertas.length, concluidas: concluidas.length, negadas: negadas.length,
+          ultimas: reqs.slice(0, 15).map(r => ({ 
+            protocolo: r.protocolo, tipo: r.tipo,
+            aluno: r.aluno?.user?.nome || 'Desconhecido',
+            status: r.status, data: r.criadoEm.toISOString().split("T")[0]
+          }))
+        };
         break;
 
-      case 'rep-06': // Utilizadores Ativos
-        const users = await prisma.user.findMany({ select: { nome: true, email: true, cargo: true, criadoEm: true } });
-        dados = { users };
+      case 'rep-06': // Utilizadores e Cargos
+        const users = await prisma.user.findMany({ orderBy: { nome: 'asc' } });
+        const contagem = { admin: 0, secretary: 0, coordinator: 0, teacher: 0, student: 0 };
+        users.forEach(u => { if (contagem[u.cargo as keyof typeof contagem] !== undefined) contagem[u.cargo as keyof typeof contagem]++; });
+        
+        dados = { users, contagem };
         break;
-
-      default:
-        dados = { mensagem: "Dados genéricos consolidados." };
     }
 
     return res.json({ tipo, geradoEm: new Date().toISOString(), dados });
   } catch (error) {
+    console.error(error);
     return res.status(500).json({ error: "Erro ao compilar dados do relatório." });
   }
 });
@@ -1684,8 +1917,13 @@ routes.get('/notificacoes', authMiddleware, async (req: AuthRequest, res) => {
 // 2. Marcar uma notificação específica como lida
 routes.put('/notificacoes/:id/lida', authMiddleware, async (req: AuthRequest, res) => {
   try {
+    const notificationId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    if (!notificationId) {
+      return res.status(400).json({ error: "ID de notificação inválido." });
+    }
+
     await prisma.notificacao.updateMany({
-      where: { id: req.params.id, userId: req.userId },
+      where: { id: notificationId, userId: req.userId },
       data: { lida: true }
     });
     return res.json({ success: true });

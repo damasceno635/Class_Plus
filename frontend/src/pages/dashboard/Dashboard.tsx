@@ -1,6 +1,4 @@
 import { useAuth } from "../../contexts/AuthContext";
-
-// Importações atualizadas apontando para as novas subpastas
 import AdminDashboard from "./admin/AdminDashboard";
 import SecretaryDashboard from "./secretary/SecretaryDashboard";
 import CoordinatorDashboard from "./coordinator/CoordinatorDashboard";

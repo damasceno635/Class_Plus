@@ -11,7 +11,6 @@ datasource db {
   provider = "postgresql"
 }
 
-// Tabela de Users (login)
 model User {
   id        String   @id @default(uuid())
   nome      String
@@ -30,7 +29,6 @@ model User {
   @@map("users") // Nome da tabela no banco
 }
 
-// Tabela de Alunos (Dados Acadêmicos e Pessoais)
 model Aluno {
   id            String   @id @default(uuid())
   matricula     String   @unique
@@ -48,7 +46,7 @@ model Aluno {
   serieTurma    String
   anoLetivo     String
   
-  // Endereço (Podemos simplificar deixando na mesma tabela por enquanto)
+  // Endereço 
   cep           String
   cidade        String
   estado        String
@@ -59,7 +57,7 @@ model Aluno {
   
   // Documentos e URLs de arquivos (Salvando os caminhos dos arquivos no servidor)
   fotoUrl       String?
-  documentos    String[] // Um array de textos guardando os caminhos dos PDFs/Imagens
+  documentos    String[]
 
   criadoEm      DateTime @default(now())
 
@@ -117,13 +115,13 @@ model Funcionario {
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   status          String
-  vaga            String   // Cargo (Professor, Coordenador, etc)
+  vaga            String   
   contrato        String
   periodoContrato String
-  dataFimContrato String?  // Opcional, pois contratos indeterminados não têm fim
+  dataFimContrato String?  
 
   cpf             String   @unique
-  ra              String   @unique // Registro Administrativo (Matrícula do funcionário)
+  ra              String   @unique // Registro Administrativo
   nascimento      String
   sexo            String
   celular         String
@@ -150,7 +148,7 @@ model Funcionario {
   // Relações
   formacoes       Formacao[]
   experiencias    Experiencia[]
-  alocacoes       Alocacao[]    // As aulas que ele dá
+  alocacoes       Alocacao[]    
 
   @@map("funcionarios")
 }
@@ -183,26 +181,21 @@ model Experiencia {
   @@map("experiencias_funcionarios")
 }
 
-// A TABELA INDEPENDENTE DE TURMAS
 model Turma {
   id          String @id @default(uuid())
-  ano         String // Ex: "1º Ano"
-  serie       String // Ex: "A"
-  periodo     String // Ex: "Matutino"
-  
-  // No futuro, podemos colocar um array de Alunos aqui!
+  ano         String
+  serie       String
+  periodo     String
   alocacoes   Alocacao[]
 
-  // Garante que não teremos duas turmas "1º Ano A - Matutino" duplicadas no banco
   @@unique([ano, serie, periodo]) 
   @@map("turmas")
 }
 
-// A PONTE (Quem dá o quê, e onde?)
 model Alocacao {
   id            String @id @default(uuid())
-  disciplina    String // Ex: "Matemática"
-  cargaHoraria  String // Ex: "40h"
+  disciplina    String
+  cargaHoraria  String
   
   funcionarioId String
   funcionario   Funcionario @relation(fields: [funcionarioId], references: [id], onDelete: Cascade)
@@ -215,29 +208,27 @@ model Alocacao {
   @@map("alocacoes_disciplinas")
 }
 
-// Módulo de Calendário - Agenda Escolar
 model Evento {
   id            String   @id @default(uuid())
   titulo        String
   descricao     String
-  data          String   // Formato "YYYY-MM-DD"
-  tipo          String   // "academic", "administrative", "holiday", "meeting"
-  horarioInicio String   // Formato "HH:mm"
-  horarioFim    String   // Formato "HH:mm"
+  data          String   
+  tipo          String   
+  horarioInicio String   
+  horarioFim    String   
   
   criadoEm      DateTime @default(now())
 
   @@map("eventos")
 }
 
-// Módulo de Roteiros de Aula
 model Roteiro {
   id                  String   @id @default(uuid())
   titulo              String
   disciplina          String
   turma               String
   dataAplicacao       String
-  status              String   // "Rascunho", "Pendente", "Aprovado", "Rejeitado"
+  status              String   
   conteudo            String
   metodologia         String
   feedbackCoordenador String?
@@ -251,10 +242,9 @@ model Roteiro {
   @@map("roteiros")
 }
 
-// Módulo de Diário de Classe e Notas
 model Frequencia {
   id          String   @id @default(uuid())
-  data        String   // "2026-05-20"
+  data        String   
   presente    Boolean
   observacao  String?
   
@@ -264,14 +254,13 @@ model Frequencia {
   alocacaoId  String
   alocacao    Alocacao @relation(fields: [alocacaoId], references: [id], onDelete: Cascade)
 
-  // Garante que não temos duas presenças gravadas para o mesmo aluno, na mesma aula, no mesmo dia
   @@unique([alunoId, alocacaoId, data])
   @@map("frequencias")
 }
 
 model Nota {
   id          String   @id @default(uuid())
-  bimestre    String   // "1º Bimestre"
+  bimestre    String   
   n1          String?
   n2          String?
   n3          String?
@@ -283,12 +272,10 @@ model Nota {
   alocacaoId  String
   alocacao    Alocacao @relation(fields: [alocacaoId], references: [id], onDelete: Cascade)
 
-  // Garante que um aluno só tem um boletim por bimestre naquela disciplina
   @@unique([alunoId, alocacaoId, bimestre])
   @@map("notas")
 }
 
-// MÓDULO DE REQUISIÇÕES (SECRETARIA)
 model Requisicao {
   id                 String   @id @default(uuid())
   protocolo          String   @unique
@@ -296,9 +283,9 @@ model Requisicao {
   descricao          String
   status             String   @default("Pendente") 
   respostaSecretaria String?
-  arquivoAnexo       String?  // O que o aluno enviou
+  arquivoAnexo       String?  // O que o aluno envia
   
-  arquivoSecretaria  String?  // <-- ADICIONE ISTO: O que a secretaria devolveu!
+  arquivoSecretaria  String?  // O que a secretaria devolve
 
   alunoId            String
   aluno              Aluno    @relation(fields: [alunoId], references: [id], onDelete: Cascade)
@@ -308,13 +295,12 @@ model Requisicao {
   
 }
 
-// MÓDULO FINANCEIRO
 model Fatura {
   id          String   @id @default(uuid())
-  referencia  String   // Ex: "Mensalidade - Maio/2026"
-  vencimento  String   // Ex: "2026-05-10"
-  valor       Float    // Usamos Float para garantir precisão matemática
-  status      String   @default("Pendente") // "Pago", "Pendente", "Atrasado"
+  referencia  String   
+  vencimento  String   
+  valor       Float    
+  status      String   @default("Pendente") 
 
   alunoId     String
   aluno       Aluno    @relation(fields: [alunoId], references: [id], onDelete: Cascade)
@@ -324,7 +310,6 @@ model Fatura {
   @@map("faturas")
 }
 
-// MÓDULO DE NOTIFICAÇÕES
 model Notificacao {
   id        String   @id @default(uuid())
   titulo    String

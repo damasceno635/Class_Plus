@@ -13,9 +13,8 @@ const multer_2 = require("./config/multer");
 const routes = (0, express_1.Router)();
 const upload = (0, multer_1.default)(multer_2.multerConfig);
 // Tipagem do Prisma para Aluno
-// =========================
+
 // 1. REGISTRO
-// =========================
 routes.post('/registro', async (req, res) => {
     const { nome, email, senha, cargo } = req.body;
     try {
@@ -39,9 +38,8 @@ routes.post('/registro', async (req, res) => {
         return res.status(500).json({ error: 'Erro interno no servidor.' });
     }
 });
-// =========================
+
 // 2. LOGIN
-// =========================
 routes.post('/login', async (req, res) => {
     const { email, senha } = req.body;
     try {
@@ -67,9 +65,8 @@ routes.post('/login', async (req, res) => {
         return res.status(500).json({ error: 'Erro interno no servidor.' });
     }
 });
-// =========================
+
 // 3. PERFIL
-// =========================
 routes.get('/perfil', authMiddleware_1.authMiddleware, async (req, res) => {
     try {
         const user = await prisma_1.default.user.findUnique({ where: { id: req.userId } });
@@ -88,9 +85,8 @@ routes.get('/perfil', authMiddleware_1.authMiddleware, async (req, res) => {
         return res.status(500).json({ error: 'Erro interno no servidor.' });
     }
 });
-// =========================
+
 // 4. CADASTRAR ALUNO
-// =========================
 routes.post('/alunos', authMiddleware_1.authMiddleware, upload.any(), async (req, res) => {
     try {
         const { nome, email, cpf, nascimento, sexo, nivelEnsino, anoTurma, serieTurma, anoLetivo, cep, cidade, estado, rua, bloco, quadra, numero, responsaveis, deficiencias, alergias } = req.body;
@@ -157,9 +153,8 @@ routes.post('/alunos', authMiddleware_1.authMiddleware, upload.any(), async (req
         return res.status(500).json({ error: 'Erro interno ao cadastrar aluno.' });
     }
 });
-// =========================
+
 // 5. LISTAR ALUNOS
-// =========================
 routes.get('/alunos', authMiddleware_1.authMiddleware, async (_req, res) => {
     try {
         const alunos = await prisma_1.default.aluno.findMany({
@@ -183,9 +178,8 @@ routes.get('/alunos', authMiddleware_1.authMiddleware, async (_req, res) => {
         return res.status(500).json({ error: 'Erro ao buscar alunos.' });
     }
 });
-// =========================
+
 // 6. BUSCAR ALUNO POR ID
-// =========================
 routes.get('/alunos/:id', authMiddleware_1.authMiddleware, async (req, res) => {
     try {
         const id = String(req.params.id);
@@ -237,9 +231,8 @@ routes.get('/alunos/:id', authMiddleware_1.authMiddleware, async (req, res) => {
         return res.status(500).json({ error: 'Erro ao carregar a ficha do aluno.' });
     }
 });
-// =========================
+
 // 7. EDITAR ALUNO
-// =========================
 routes.put('/alunos/:id', authMiddleware_1.authMiddleware, upload.any(), async (req, res) => {
     try {
         const id = String(req.params.id);
@@ -303,9 +296,8 @@ routes.put('/alunos/:id', authMiddleware_1.authMiddleware, upload.any(), async (
         return res.status(500).json({ error: 'Erro interno ao atualizar aluno.' });
     }
 });
-// =========================
+
 // 8. EXCLUIR ALUNO
-// =========================
 routes.delete('/alunos/:id', authMiddleware_1.authMiddleware, async (req, res) => {
     try {
         const id = String(req.params.id);
@@ -321,9 +313,8 @@ routes.delete('/alunos/:id', authMiddleware_1.authMiddleware, async (req, res) =
         return res.status(500).json({ error: 'Erro interno ao excluir aluno.' });
     }
 });
-// ==========================================
+
 // ROTAS DE FUNCIONÁRIOS
-// ==========================================
 // Cadastrar funcionário
 routes.post('/funcionarios', authMiddleware_1.authMiddleware, upload.any(), async (req, res) => {
     try {
@@ -403,7 +394,7 @@ routes.post('/funcionarios', authMiddleware_1.authMiddleware, upload.any(), asyn
         return res.status(500).json({ error: 'Erro interno ao cadastrar funcionário.' });
     }
 });
-// Listar funcionários (resumido)
+// Listar funcionários
 routes.get('/funcionarios', authMiddleware_1.authMiddleware, async (req, res) => {
     try {
         const funcionarios = await prisma_1.default.funcionario.findMany({
@@ -424,7 +415,7 @@ routes.get('/funcionarios', authMiddleware_1.authMiddleware, async (req, res) =>
         return res.status(500).json({ error: 'Erro ao buscar funcionários.' });
     }
 });
-// Buscar funcionário por ID (completo)
+// Buscar funcionário por ID
 routes.get('/funcionarios/:id', authMiddleware_1.authMiddleware, async (req, res) => {
     try {
         const { id } = req.params;

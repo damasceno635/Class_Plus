@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import type { ReactNode } from "react";
 import { 
-  CheckCircle2, Clock, Activity, FileText, Search, Eye, X, 
+  CheckCircle2, Clock, FileText, Search, Eye, X, 
   Paperclip, Download, AlertCircle, XCircle, Loader2 
 } from "lucide-react";
 import Sidebar from "../../../components/layout/Sidebar";
@@ -66,15 +66,19 @@ export default function AdminRequests() {
     carregarRequisicoes();
   }, []);
 
-  // Cálculos dinâmicos para os cartões
-  const totalRequisicoes = requisicoes.length;
-  const filaEspera = requisicoes.filter(r => r.status === "Pendente" || r.status === "Em Análise").length;
-  const resolvidos = requisicoes.filter(r => r.status === "Concluído").length;
+  const totalRecebido = requisicoes.length;
+  const pendentes = requisicoes.filter(r => r.status === "Pendente").length;
+  const emAnalise = requisicoes.filter(r => r.status === "Em Análise").length;
+  const rejeitados = requisicoes.filter(r => r.status === "Negado").length;
 
   const filteredRequisicoes = useMemo(() => {
+    // O Admin só visualiza as Concluídas no log
+    const apenasConcluidos = requisicoes.filter(r => r.status === "Concluído");
+    
     const term = searchTerm.toLowerCase().trim();
-    if (!term) return requisicoes;
-    return requisicoes.filter(r => 
+    if (!term) return apenasConcluidos;
+    
+    return apenasConcluidos.filter(r => 
       r.id.toLowerCase().includes(term) || 
       r.tipo.toLowerCase().includes(term) ||
       r.solicitante.toLowerCase().includes(term)
@@ -104,34 +108,42 @@ export default function AdminRequests() {
             <p className="text-slate-500 dark:text-slate-400">Acompanhamento institucional do volume de requisições operacionais e acadêmicas.</p>
           </div>
 
+          {/* GRID COM CARDS DE CONTAGEM */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm">
+            {/* Card 1: Total Recebido */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm hover:scale-[1.02] transition-transform duration-300">
               <div className="flex items-center gap-3 mb-2 text-blue-600 dark:text-blue-400">
                 <FileText size={20} /> <span className="font-bold text-sm uppercase">Total Recebido</span>
               </div>
-              <p className="text-3xl font-black text-slate-800 dark:text-white">{totalRequisicoes}</p>
+              <p className="text-3xl font-black text-slate-800 dark:text-white">{totalRecebido}</p>
             </div>
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm">
+
+            {/* Card 2: Pendentes */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm hover:scale-[1.02] transition-transform duration-300">
               <div className="flex items-center gap-3 mb-2 text-amber-500">
-                <Clock size={20} /> <span className="font-bold text-sm uppercase">Fila de Espera</span>
+                <Clock size={20} /> <span className="font-bold text-sm uppercase">Pendentes</span>
               </div>
-              <p className="text-3xl font-black text-slate-800 dark:text-white">{filaEspera}</p>
+              <p className="text-3xl font-black text-slate-800 dark:text-white">{pendentes}</p>
             </div>
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm">
-              <div className="flex items-center gap-3 mb-2 text-green-500">
-                <CheckCircle2 size={20} /> <span className="font-bold text-sm uppercase">Resolvidos</span>
+
+            {/* Card 3: Em Análise */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm hover:scale-[1.02] transition-transform duration-300">
+              <div className="flex items-center gap-3 mb-2 text-cyan-500 dark:text-cyan-400">
+                <AlertCircle size={20} /> <span className="font-bold text-sm uppercase">Em Análise</span>
               </div>
-              <p className="text-3xl font-black text-slate-800 dark:text-white">{resolvidos}</p>
+              <p className="text-3xl font-black text-slate-800 dark:text-white">{emAnalise}</p>
             </div>
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm">
-              <div className="flex items-center gap-3 mb-2 text-purple-500">
-                <Activity size={20} /> <span className="font-bold text-sm uppercase">Auditoria</span>
+
+            {/* Card 4: Rejeitados / Negados */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm hover:scale-[1.02] transition-transform duration-300">
+              <div className="flex items-center gap-3 mb-2 text-rose-500">
+                <XCircle size={20} /> <span className="font-bold text-sm uppercase">Rejeitados</span>
               </div>
-              <p className="text-3xl font-black text-slate-800 dark:text-white">Ativa</p>
+              <p className="text-3xl font-black text-slate-800 dark:text-white">{rejeitados}</p>
             </div>
           </div>
 
-          <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-4">Log de Movimentações Global</h2>
+          <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-4">Log de Movimentações (Concluídas)</h2>
           
           <div className="mb-4 max-w-md relative">
             <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -173,7 +185,7 @@ export default function AdminRequests() {
                           </span>
                         </td>
                         <td className="px-6 py-4 text-center">
-                          <button onClick={() => setSelectedReq(req)} className="action-btn inline-flex items-center justify-center bg-slate-600 hover:bg-slate-700 text-white" title="Ver Detalhes do Atendimento">
+                          <button onClick={() => setSelectedReq(req)} className="p-2 rounded-xl transition-all duration-200 bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50" title="Visualizar">
                             <Eye size={16} />
                           </button>
                         </td>
@@ -181,7 +193,7 @@ export default function AdminRequests() {
                     );
                   })}
                   {filteredRequisicoes.length === 0 && (
-                    <tr><td colSpan={5} className="text-center py-12 text-slate-500">Nenhum registro encontrado no log.</td></tr>
+                    <tr><td colSpan={5} className="text-center py-12 text-slate-500 dark:text-slate-400">Nenhum protocolo concluído encontrado no log.</td></tr>
                   )}
                 </tbody>
               </table>

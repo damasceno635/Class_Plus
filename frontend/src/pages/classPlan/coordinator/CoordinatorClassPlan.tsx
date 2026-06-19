@@ -165,8 +165,11 @@ export default function CoordinatorClassPlan() {
                           <div className="flex items-center justify-center">
                             <button
                               onClick={() => abrirModal(roteiro)}
-                              title={roteiro.status === "Pendente" ? "Avaliar Roteiro" : "Ver Detalhes"}
-                              className={`action-btn flex items-center justify-center ${roteiro.status === "Pendente" ? "bg-amber-500 hover:bg-amber-600" : "bg-blue-600 hover:bg-blue-700"}`}
+                              title={roteiro.status === "Pendente" ? "Avaliar Roteiro" : "Visualizar"}
+                              className={`p-2 rounded-xl transition-all duration-200 ${
+                                roteiro.status === "Pendente" 
+                                  ? "bg-amber-200 text-amber-900 hover:bg-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-900/50" 
+                                  : "bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"}`}
                             >
                               <Eye size={16} />
                             </button>
@@ -233,7 +236,7 @@ export default function CoordinatorClassPlan() {
                     </div>
                     <div className="flex gap-3 justify-end">
                       <button onClick={() => handleAvaliar("Rejeitado")} className="flex items-center gap-2 px-5 py-3 rounded-xl bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50 font-bold transition">
-                        <ThumbsDown size={18} /> Rejeitar e Solicitar Ajustes
+                        <ThumbsDown size={18} /> Rejeitar Roteiro
                       </button>
                       <button onClick={() => handleAvaliar("Aprovado")} className="flex items-center gap-2 px-6 py-3 rounded-xl bg-green-600 text-white hover:bg-green-700 font-bold transition">
                         <ThumbsUp size={18} /> Aprovar Roteiro

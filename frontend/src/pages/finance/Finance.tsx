@@ -1,6 +1,5 @@
 import { useAuth } from "../../contexts/AuthContext";
 import { Navigate } from "react-router-dom";
-
 import AdminFinance from "./admin/AdminFinance";
 import SecretaryFinance from "./secretary/SecretaryFinance";
 import StudentFinance from "./student/StudentFinance";
