@@ -1,0 +1,325 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  nome      String
+  email     String   @unique
+  senha     String
+  cargo     String   // "admin", "secretary", "coordinator", "teacher", "student"
+  fotoUrl   String?
+  criadoEm  DateTime @default(now())
+
+  // Relação: um usuário pode ser um aluno
+  aluno       Aluno?
+  funcionario Funcionario?
+  roteiros    Roteiro[]
+  notificacoes Notificacao[]
+
+  @@map("users") // Nome da tabela no banco
+}
+
+model Aluno {
+  id            String   @id @default(uuid())
+  matricula     String   @unique
+  
+  // Ligação com a tabela User (O aluno loga usando as credenciais do User)
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id])
+
+  status        String
+  cpf           String   @unique
+  nascimento    String
+  sexo          String
+  nivelEnsino   String
+  anoTurma      String
+  serieTurma    String
+  anoLetivo     String
+  
+  // Endereço 
+  cep           String
+  cidade        String
+  estado        String
+  rua           String
+  bloco         String?
+  quadra        String?
+  numero        String
+  
+  // Documentos e URLs de arquivos (Salvando os caminhos dos arquivos no servidor)
+  fotoUrl       String?
+  documentos    String[]
+
+  criadoEm      DateTime @default(now())
+
+  responsaveis  Responsavel[]
+  deficiencias  Deficiencia[]
+  alergias      Alergia[]
+  frequencias   Frequencia[]
+  notas         Nota[]
+  requisicoes   Requisicao[]
+  faturas       Fatura[]
+
+  @@map("alunos")
+}
+
+model Responsavel {
+  id         String @id @default(uuid())
+  parentesco String
+  nome       String
+  cpf        String
+  contato    String
+  email      String
+  
+  alunoId    String
+  aluno      Aluno  @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+
+  @@map("responsaveis")
+}
+
+model Deficiencia {
+  id         String @id @default(uuid())
+  nome       String
+  apoio      String
+  laudo      String?
+  alunoId    String
+  aluno      Aluno  @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+
+  @@map("deficiencias")
+}
+
+model Alergia {
+  id         String @id @default(uuid())
+  nome       String
+  laudo      String?
+  alunoId    String
+  aluno      Aluno  @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+
+  @@map("alergias")
+}
+
+model Funcionario {
+  id              String   @id @default(uuid())
+  
+  // Ligação com a tabela User (Login)
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  status          String
+  vaga            String   
+  contrato        String
+  periodoContrato String
+  dataFimContrato String?  
+
+  cpf             String   @unique
+  ra              String   @unique // Registro Administrativo
+  nascimento      String
+  sexo            String
+  celular         String
+  
+  // Endereço
+  cep             String
+  cidade          String
+  estado          String
+  rua             String
+  bloco           String?
+  quadra          String?
+  numero          String
+
+  // Financeiro
+  salario         String
+  pagamento       String
+
+  // Arquivos
+  fotoUrl         String?
+  documentos      String[]
+
+  criadoEm        DateTime @default(now())
+
+  // Relações
+  formacoes       Formacao[]
+  experiencias    Experiencia[]
+  alocacoes       Alocacao[]    
+
+  @@map("funcionarios")
+}
+
+model Formacao {
+  id            String @id @default(uuid())
+  instituicao   String
+  cnpj          String
+  modalidade    String
+  periodoInicio String
+  periodoFinal  String
+  
+  funcionarioId String
+  funcionario   Funcionario @relation(fields: [funcionarioId], references: [id], onDelete: Cascade)
+
+  @@map("formacoes_funcionarios")
+}
+
+model Experiencia {
+  id            String @id @default(uuid())
+  empresa       String
+  cnpj          String
+  modalidade    String
+  periodoInicio String
+  periodoFinal  String
+  
+  funcionarioId String
+  funcionario   Funcionario @relation(fields: [funcionarioId], references: [id], onDelete: Cascade)
+
+  @@map("experiencias_funcionarios")
+}
+
+model Turma {
+  id          String @id @default(uuid())
+  ano         String
+  serie       String
+  periodo     String
+  alocacoes   Alocacao[]
+
+  @@unique([ano, serie, periodo]) 
+  @@map("turmas")
+}
+
+model Alocacao {
+  id            String @id @default(uuid())
+  disciplina    String
+  cargaHoraria  String
+  
+  funcionarioId String
+  funcionario   Funcionario @relation(fields: [funcionarioId], references: [id], onDelete: Cascade)
+  
+  turmaId       String
+  turma         Turma @relation(fields: [turmaId], references: [id], onDelete: Cascade)
+  frequencias   Frequencia[]
+  notas         Nota[]
+
+  @@map("alocacoes_disciplinas")
+}
+
+model Evento {
+  id            String   @id @default(uuid())
+  titulo        String
+  descricao     String
+  data          String   
+  tipo          String   
+  horarioInicio String   
+  horarioFim    String   
+  
+  criadoEm      DateTime @default(now())
+
+  @@map("eventos")
+}
+
+model Roteiro {
+  id                  String   @id @default(uuid())
+  titulo              String
+  disciplina          String
+  turma               String
+  dataAplicacao       String
+  status              String   
+  conteudo            String
+  metodologia         String
+  feedbackCoordenador String?
+
+  // Ligação com quem criou (o Professor)
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  criadoEm            DateTime @default(now())
+
+  @@map("roteiros")
+}
+
+model Frequencia {
+  id          String   @id @default(uuid())
+  data        String   
+  presente    Boolean
+  observacao  String?
+  
+  alunoId     String
+  aluno       Aluno    @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+  
+  alocacaoId  String
+  alocacao    Alocacao @relation(fields: [alocacaoId], references: [id], onDelete: Cascade)
+
+  @@unique([alunoId, alocacaoId, data])
+  @@map("frequencias")
+}
+
+model Nota {
+  id          String   @id @default(uuid())
+  bimestre    String   
+  n1          String?
+  n2          String?
+  n3          String?
+  n4          String?
+  
+  alunoId     String
+  aluno       Aluno    @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+  
+  alocacaoId  String
+  alocacao    Alocacao @relation(fields: [alocacaoId], references: [id], onDelete: Cascade)
+
+  @@unique([alunoId, alocacaoId, bimestre])
+  @@map("notas")
+}
+
+model Requisicao {
+  id                 String   @id @default(uuid())
+  protocolo          String   @unique
+  tipo               String
+  descricao          String
+  status             String   @default("Pendente") 
+  respostaSecretaria String?
+  arquivoAnexo       String?  // O que o aluno envia
+  
+  arquivoSecretaria  String?  // O que a secretaria devolve
+
+  alunoId            String
+  aluno              Aluno    @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+  criadoEm           DateTime @default(now())
+
+  @@map("requisicoes")
+  
+}
+
+model Fatura {
+  id          String   @id @default(uuid())
+  referencia  String   
+  vencimento  String   
+  valor       Float    
+  status      String   @default("Pendente") 
+
+  alunoId     String
+  aluno       Aluno    @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+
+  criadoEm    DateTime @default(now())
+
+  @@map("faturas")
+}
+
+model Notificacao {
+  id        String   @id @default(uuid())
+  titulo    String
+  mensagem  String
+  lida      Boolean  @default(false)
+  
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  criadoEm  DateTime @default(now())
+
+  @@map("notificacoes")
+}

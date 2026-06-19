@@ -1,14 +1,35 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Moon, Sun, Mail, Lock } from "lucide-react";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../contexts/AuthContext";
 
 export default function Login() {
-  const themeContext = useTheme() as { theme?: string; toggleTheme: () => void };
-  const { toggleTheme } = themeContext;
-  const isDark = themeContext.theme === "dark";
+  const themeContext = useTheme();
+
+  const toggleTheme = themeContext?.toggleTheme || (() => {});
+  const theme = (themeContext as any)?.theme || "light";
+
+  const isDark = theme === "dark";
+
+  const [email, setEmail] = useState("");
+  const [senha, setSenha] = useState("");
+
+  const { login } = useAuth();
 
   const navigate = useNavigate();
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      // Usa o await para esperar o backend processar
+      await login(email, senha);
+      navigate("/dashboard");
+    } catch (error) {
+      // O alert já foi dado no AuthContext
+    }
+  }
 
   return (
     <div
@@ -33,7 +54,7 @@ export default function Login() {
           w-full
           max-w-md
           rounded-3xl
-          p-8
+          p-6 sm:p-8
           shadow-2xl
           border
           bg-white
@@ -42,13 +63,14 @@ export default function Login() {
           dark:border-slate-800
         "
       >
-        {/* Header com Logo e Toggle Theme */}
-        <div className="flex items-center justify-between mb-8">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6 sm:mb-8">
           <div>
-            <h1 className="text-4xl font-bold text-blue-600 dark:text-blue-500">
+            <h1 className="text-3xl sm:text-4xl font-bold text-blue-600 dark:text-blue-500">
               Class+
             </h1>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1">
               Educação Inteligente para o Futuro
             </p>
           </div>
@@ -56,11 +78,11 @@ export default function Login() {
           <button
             onClick={toggleTheme}
             className="
-              p-2 
-              rounded-full 
-              bg-blue-600 
-              hover:bg-blue-700 
-              text-white 
+              p-2
+              rounded-full
+              bg-blue-600
+              hover:bg-blue-700
+              text-white
               cursor-pointer
               transition-all
               hover:scale-110
@@ -72,8 +94,9 @@ export default function Login() {
         </div>
 
         {/* Formulário */}
-        <form className="space-y-5">
-          {/* Campo Email */}
+        <form onSubmit={handleLogin} className="space-y-5">
+
+          {/* Email */}
           <div>
             <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
               Email
@@ -81,13 +104,23 @@ export default function Login() {
 
             <div className="relative mt-2">
               <Mail
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"
+                className="
+                  absolute
+                  left-3
+                  top-1/2
+                  -translate-y-1/2
+                  text-slate-400
+                  dark:text-slate-500
+                "
                 size={18}
               />
 
               <input
                 type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 placeholder="Digite seu email"
+                required
                 className="
                   w-full
                   pl-10
@@ -112,7 +145,7 @@ export default function Login() {
             </div>
           </div>
 
-          {/* Campo Senha */}
+          {/* Senha */}
           <div>
             <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
               Senha
@@ -120,13 +153,23 @@ export default function Login() {
 
             <div className="relative mt-2">
               <Lock
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"
+                className="
+                  absolute
+                  left-3
+                  top-1/2
+                  -translate-y-1/2
+                  text-slate-400
+                  dark:text-slate-500
+                "
                 size={18}
               />
 
               <input
                 type="password"
+                value={senha}
+                onChange={(e) => setSenha(e.target.value)}
                 placeholder="Digite sua senha"
+                required
                 className="
                   w-full
                   pl-10
@@ -151,22 +194,31 @@ export default function Login() {
             </div>
           </div>
 
-          {/* Link Esqueceu a Senha */}
+          {/* Esqueceu senha */}
           <div className="text-right">
             <a
               href="#"
-              className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+              onClick={(e) => {
+                e.preventDefault();
+
+                alert("Funcionalidade em desenvolvimento");
+              }}
+              className="
+                text-sm
+                text-blue-600
+                dark:text-blue-400
+                hover:underline
+              "
             >
               Esqueceu a senha?
             </a>
           </div>
 
-          {/* Botão Entrar */}
+          {/* Botão */}
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            type="button"
-            onClick={() => navigate("/dashboard")}
+            type="submit"
             className="
               w-full
               p-3
@@ -186,8 +238,8 @@ export default function Login() {
         </form>
 
         {/* Rodapé */}
-        <p className="text-center text-sm text-slate-500 dark:text-slate-400 mt-6">
-          © 2025 Class+. Todos os direitos reservados.
+        <p className="text-center text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-6">
+          © 2026 Class Plus. Todos os direitos reservados.
         </p>
       </motion.div>
     </div>
